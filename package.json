@@ -1,0 +1,63 @@
+{
+	"name": "meadow-migrationmanager",
+	"version": "0.0.1",
+	"description": "Meadow Migration Manager - CLI, Web, and Console UI tool for managing database schemas and migrations",
+	"main": "source/MeadowMigrationManager.js",
+	"bin": {
+		"meadow-migration": "./source/MeadowMigrationManager-CLI.js"
+	},
+	"scripts": {
+		"start": "node source/MeadowMigrationManager-CLI.js",
+		"test": "npx mocha -u tdd --exit --timeout 30000 --recursive test/",
+		"tests": "npx mocha -u tdd --exit --timeout 30000 --recursive test/ --watch",
+		"build": "npx quack build"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/stevenvelozo/meadow-migrationmanager.git"
+	},
+	"keywords": [
+		"meadow",
+		"migration",
+		"schema",
+		"database",
+		"ddl"
+	],
+	"author": "Steven Velozo <steven@velozo.com>",
+	"license": "MIT",
+	"devDependencies": {
+		"quackage": "^1.0.59"
+	},
+	"dependencies": {
+		"async": "^3.2.6",
+		"blessed": "^0.1.81",
+		"fable": "^3.0.417",
+		"jsonfile": "^6.2.0",
+		"mkdirp": "^3.0.1",
+		"pict": "^1.0.355",
+		"pict-application": "^1.0.33",
+		"pict-section-flow": "^0.0.3",
+		"pict-service-commandlineutility": "^1.0.19",
+		"pict-terminalui": "^0.0.3",
+		"pict-view": "^1.0.67",
+		"stricture": "^4.0.0"
+	},
+	"mocha": {
+		"diff": true,
+		"extension": [
+			"js"
+		],
+		"package": "./package.json",
+		"reporter": "spec",
+		"slow": "75",
+		"timeout": "30000",
+		"ui": "tdd",
+		"watch-files": [
+			"source/**/*.js",
+			"test/**/*.js"
+		],
+		"watch-ignore": [
+			"lib/vendor"
+		]
+	}
+}

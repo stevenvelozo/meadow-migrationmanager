@@ -1,0 +1,284 @@
+/**
+ * Meadow Migration Manager - Schema Visualizer Service
+ *
+ * Produces text-based schema visualizations from DDL-level compiled schemas.
+ * All methods are synchronous and operate on compiled schema objects (the
+ * output of StrictureAdapter.compile()), returning formatted strings suitable
+ * for console output or embedding in documentation.
+ *
+ * @license MIT
+ * @author Steven Velozo <steven@velozo.com>
+ */
+const libFableServiceBase = require('fable').ServiceProviderBase;
+
+/**
+ * Service that produces text-based schema visualizations.
+ */
+class MigrationManagerServiceSchemaVisualizer extends libFableServiceBase
+{
+	/**
+	 * @param {Object} pFable - The Fable Framework instance
+	 * @param {Object} pOptions - The options for the service
+	 * @param {String} pServiceHash - The hash of the service
+	 */
+	constructor(pFable, pOptions, pServiceHash)
+	{
+		super(pFable, pOptions, pServiceHash);
+
+		/** @type {any} */
+		this.log;
+
+		this.serviceType = 'SchemaVisualizer';
+	}
+
+	/**
+	 * Generate a formatted list of all tables with column counts.
+	 *
+	 * Produces output in the format:
+	 *   Tables (5):
+	 *     Book          (7 columns)
+	 *     Author        (2 columns)
+	 *
+	 * @param {Object} pCompiledSchema - A compiled DDL schema with a Tables array
+	 * @param {Array}  pCompiledSchema.Tables - Array of table objects
+	 *
+	 * @return {string} A formatted table list string
+	 */
+	generateTableList(pCompiledSchema)
+	{
+		let tmpTables = Array.isArray(pCompiledSchema.Tables) ? pCompiledSchema.Tables : [];
+		let tmpLines = [];
+
+		tmpLines.push(`Tables (${tmpTables.length}):`);
+
+		for (let i = 0; i < tmpTables.length; i++)
+		{
+			let tmpTable = tmpTables[i];
+			let tmpTableName = tmpTable.TableName || 'Unknown';
+			let tmpColumns = Array.isArray(tmpTable.Columns) ? tmpTable.Columns : [];
+			let tmpColumnCount = tmpColumns.length;
+
+			tmpLines.push(`  ${tmpTableName.padEnd(20)}(${tmpColumnCount} column${tmpColumnCount !== 1 ? 's' : ''})`);
+		}
+
+		return tmpLines.join('\n');
+	}
+
+	/**
+	 * Generate a formatted detail view of a single table's columns.
+	 *
+	 * Produces output in the format:
+	 *   Table: Book
+	 *     IDBook           ID
+	 *     Title            String(200)
+	 *     Genre            String(128)
+	 *     PublicationYear  Numeric
+	 *
+	 * @param {Object} pTableSchema - A single table schema object
+	 * @param {string} pTableSchema.TableName - The name of the table
+	 * @param {Array}  pTableSchema.Columns - Array of column objects
+	 *
+	 * @return {string} A formatted table detail string
+	 */
+	generateTableDetail(pTableSchema)
+	{
+		let tmpTableName = pTableSchema.TableName || 'Unknown';
+		let tmpColumns = Array.isArray(pTableSchema.Columns) ? pTableSchema.Columns : [];
+		let tmpLines = [];
+
+		tmpLines.push(`Table: ${tmpTableName}`);
+
+		for (let i = 0; i < tmpColumns.length; i++)
+		{
+			let tmpColumn = tmpColumns[i];
+			let tmpColumnName = tmpColumn.Column || 'Unknown';
+			let tmpDataType = tmpColumn.DataType || 'Unknown';
+
+			let tmpTypeDisplay = tmpDataType;
+
+			if (tmpColumn.hasOwnProperty('Size') && tmpColumn.Size)
+			{
+				tmpTypeDisplay = `${tmpDataType}(${tmpColumn.Size})`;
+			}
+
+			tmpLines.push(`  ${tmpColumnName.padEnd(20)}${tmpTypeDisplay}`);
+		}
+
+		return tmpLines.join('\n');
+	}
+
+	/**
+	 * Generate a formatted map of foreign key relationships.
+	 *
+	 * Iterates all tables in the compiled schema, inspecting each table's
+	 * ForeignKeys array (if present) to produce output in the format:
+	 *   Foreign Key Relationships:
+	 *     BookAuthorJoin.IDBook    -> Book.IDBook
+	 *     BookAuthorJoin.IDAuthor  -> Author.IDAuthor
+	 *
+	 * Returns "No foreign key relationships found." if no FKs exist.
+	 *
+	 * @param {Object} pCompiledSchema - A compiled DDL schema with a Tables array
+	 * @param {Array}  pCompiledSchema.Tables - Array of table objects
+	 *
+	 * @return {string} A formatted relationship map string
+	 */
+	generateRelationshipMap(pCompiledSchema)
+	{
+		let tmpTables = Array.isArray(pCompiledSchema.Tables) ? pCompiledSchema.Tables : [];
+		let tmpRelationships = [];
+
+		for (let i = 0; i < tmpTables.length; i++)
+		{
+			let tmpTable = tmpTables[i];
+			let tmpTableName = tmpTable.TableName || 'Unknown';
+			let tmpForeignKeys = Array.isArray(tmpTable.ForeignKeys) ? tmpTable.ForeignKeys : [];
+
+			for (let j = 0; j < tmpForeignKeys.length; j++)
+			{
+				let tmpFK = tmpForeignKeys[j];
+				let tmpSourceColumn = tmpFK.Column || 'Unknown';
+				let tmpTargetTable = tmpFK.ReferencesTable || 'Unknown';
+				let tmpTargetColumn = tmpFK.ReferencesColumn || 'Unknown';
+
+				tmpRelationships.push(
+				{
+					Source: `${tmpTableName}.${tmpSourceColumn}`,
+					Target: `${tmpTargetTable}.${tmpTargetColumn}`
+				});
+			}
+		}
+
+		if (tmpRelationships.length === 0)
+		{
+			return 'No foreign key relationships found.';
+		}
+
+		let tmpLines = [];
+		tmpLines.push('Foreign Key Relationships:');
+
+		for (let i = 0; i < tmpRelationships.length; i++)
+		{
+			let tmpRel = tmpRelationships[i];
+			tmpLines.push(`  ${tmpRel.Source.padEnd(30)}-> ${tmpRel.Target}`);
+		}
+
+		return tmpLines.join('\n');
+	}
+
+	/**
+	 * Get the abbreviated type code for a DataType string.
+	 *
+	 * @param {string} pDataType - The DataType value from a column definition
+	 *
+	 * @return {string} The abbreviated type code
+	 */
+	_getTypeAbbreviation(pDataType)
+	{
+		switch (pDataType)
+		{
+			case 'ID':
+				return '[PK]';
+			case 'String':
+				return 'STR';
+			case 'Numeric':
+				return 'NUM';
+			case 'Decimal':
+				return 'DEC';
+			case 'DateTime':
+				return 'DT';
+			case 'Text':
+				return 'TXT';
+			case 'Boolean':
+				return 'BOL';
+			case 'ForeignKey':
+				return 'FK';
+			case 'GUID':
+				return 'GID';
+			default:
+				return pDataType || '???';
+		}
+	}
+
+	/**
+	 * Generate an ASCII box diagram of all tables in the schema.
+	 *
+	 * Produces output in the format:
+	 *   +------------------+
+	 *   | Book             |
+	 *   +------------------+
+	 *   | IDBook       [PK]|
+	 *   | Title        STR |
+	 *   | Genre        STR |
+	 *   +------------------+
+	 *
+	 * Uses a consistent box width per table based on the longest column name
+	 * and type abbreviation plus padding.
+	 *
+	 * @param {Object} pCompiledSchema - A compiled DDL schema with a Tables array
+	 * @param {Array}  pCompiledSchema.Tables - Array of table objects
+	 *
+	 * @return {string} A formatted ASCII diagram string
+	 */
+	generateASCIIDiagram(pCompiledSchema)
+	{
+		let tmpTables = Array.isArray(pCompiledSchema.Tables) ? pCompiledSchema.Tables : [];
+		let tmpDiagramParts = [];
+
+		for (let i = 0; i < tmpTables.length; i++)
+		{
+			let tmpTable = tmpTables[i];
+			let tmpTableName = tmpTable.TableName || 'Unknown';
+			let tmpColumns = Array.isArray(tmpTable.Columns) ? tmpTable.Columns : [];
+
+			// Calculate the minimum inner width based on table name and columns
+			let tmpMinWidth = tmpTableName.length + 2;
+
+			for (let j = 0; j < tmpColumns.length; j++)
+			{
+				let tmpColumnName = tmpColumns[j].Column || 'Unknown';
+				let tmpTypeAbbr = this._getTypeAbbreviation(tmpColumns[j].DataType);
+				// Column line: "| {name} {type}|"  with at least one space between name and type
+				let tmpColumnLineWidth = tmpColumnName.length + 1 + tmpTypeAbbr.length + 1;
+
+				if (tmpColumnLineWidth > tmpMinWidth)
+				{
+					tmpMinWidth = tmpColumnLineWidth;
+				}
+			}
+
+			let tmpInnerWidth = tmpMinWidth;
+			let tmpBorderLine = '+' + '-'.repeat(tmpInnerWidth) + '+';
+
+			let tmpTableLines = [];
+
+			// Header
+			tmpTableLines.push(tmpBorderLine);
+			tmpTableLines.push('| ' + tmpTableName.padEnd(tmpInnerWidth - 1) + '|');
+			tmpTableLines.push(tmpBorderLine);
+
+			// Columns
+			for (let j = 0; j < tmpColumns.length; j++)
+			{
+				let tmpColumnName = tmpColumns[j].Column || 'Unknown';
+				let tmpTypeAbbr = this._getTypeAbbreviation(tmpColumns[j].DataType);
+				// Right-align the type abbreviation within the box
+				let tmpContentWidth = tmpInnerWidth - 1; // subtract 1 for leading space in "| "
+				let tmpContent = tmpColumnName.padEnd(tmpContentWidth - tmpTypeAbbr.length) + tmpTypeAbbr;
+				tmpTableLines.push('| ' + tmpContent + '|');
+			}
+
+			// Footer
+			tmpTableLines.push(tmpBorderLine);
+
+			tmpDiagramParts.push(tmpTableLines.join('\n'));
+		}
+
+		return tmpDiagramParts.join('\n\n');
+	}
+}
+
+module.exports = MigrationManagerServiceSchemaVisualizer;
+
+/** @type {Record<string, any>} */
+MigrationManagerServiceSchemaVisualizer.default_configuration = {};
