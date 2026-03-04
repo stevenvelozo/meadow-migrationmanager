@@ -9,6 +9,7 @@
  * @param {object} pOptions
  * @param {string} pOptions.ModelPath    - Absolute path to the directory containing .mddl files
  * @param {number} pOptions.Port         - HTTP port to listen on
+ * @param {string} [pOptions.RoutePrefix] - Optional route prefix for all endpoints (e.g. '/meadow-migrationmanager')
  * @param {object} [pOptions.FableSettings] - Optional Fable settings to merge
  * @param {Function} fCallback           - Callback(pError, { Fable, Orator, Port, SchemaCount })
  *
@@ -303,6 +304,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 			function ()
 			{
 				let tmpServiceServer = tmpOrator.serviceServer;
+				let tmpRoutePrefix = pOptions.RoutePrefix || '';
 
 				// Enable body parsing for POST/PUT requests
 				tmpServiceServer.server.use(tmpServiceServer.bodyParser());
@@ -313,7 +315,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 
 				// GET /lib/codejar.js — serve CodeJar as a global (strip ES module export)
 				let tmpCodeJarPath = libPath.join(__dirname, '..', 'node_modules', 'codejar', 'dist', 'codejar.js');
-				tmpServiceServer.get('/lib/codejar.js',
+				tmpServiceServer.get(tmpRoutePrefix + '/lib/codejar.js',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -334,7 +336,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 
 				// GET /lib/pict.min.js — serve Pict browser bundle
 				let tmpPictPath = libPath.join(__dirname, '..', 'node_modules', 'pict', 'dist', 'pict.min.js');
-				tmpServiceServer.get('/lib/pict.min.js',
+				tmpServiceServer.get(tmpRoutePrefix + '/lib/pict.min.js',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -353,7 +355,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 
 				// GET /lib/pict-section-flow.min.js — serve pict-section-flow browser bundle
 				let tmpFlowPath = libPath.join(__dirname, '..', 'node_modules', 'pict-section-flow', 'dist', 'pict-section-flow.min.js');
-				tmpServiceServer.get('/lib/pict-section-flow.min.js',
+				tmpServiceServer.get(tmpRoutePrefix + '/lib/pict-section-flow.min.js',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -375,7 +377,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 				// ============================================================
 
 				// GET /api/schemas — list all schemas with compiled status
-				tmpServiceServer.get('/api/schemas',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -410,7 +412,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/schemas/:name — full schema detail
-				tmpServiceServer.get('/api/schemas/:name',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas/:name',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -446,7 +448,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/schemas/:name/ddl — raw DDL text
-				tmpServiceServer.get('/api/schemas/:name/ddl',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas/:name/ddl',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -469,7 +471,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// PUT /api/schemas/:name/ddl — update DDL text
-				tmpServiceServer.put('/api/schemas/:name/ddl',
+				tmpServiceServer.put(tmpRoutePrefix + '/api/schemas/:name/ddl',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -521,7 +523,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/schemas/:name/files — discover all DDL files (main + includes)
-				tmpServiceServer.get('/api/schemas/:name/files',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas/:name/files',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -610,7 +612,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/schemas/:name/file/:filepath — read a specific child file by relative path
-				tmpServiceServer.get('/api/schemas/:name/file/:filepath',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas/:name/file/:filepath',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -652,7 +654,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// PUT /api/schemas/:name/file/:filepath — write updated content to a specific child file
-				tmpServiceServer.put('/api/schemas/:name/file/:filepath',
+				tmpServiceServer.put(tmpRoutePrefix + '/api/schemas/:name/file/:filepath',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -720,7 +722,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// POST /api/schemas/:name/compile — compile DDL
-				tmpServiceServer.post('/api/schemas/:name/compile',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/schemas/:name/compile',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -790,7 +792,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/schemas/:name/visualize — visualization data
-				tmpServiceServer.get('/api/schemas/:name/visualize',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas/:name/visualize',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -846,7 +848,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/schemas/:name/meadow-packages — Meadow package JSON
-				tmpServiceServer.get('/api/schemas/:name/meadow-packages',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/schemas/:name/meadow-packages',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -886,7 +888,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 				// ============================================================
 
 				// GET /api/providers — list available database provider types
-				tmpServiceServer.get('/api/providers',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/providers',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -905,7 +907,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// GET /api/connections — list all saved connections
-				tmpServiceServer.get('/api/connections',
+				tmpServiceServer.get(tmpRoutePrefix + '/api/connections',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -941,7 +943,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// POST /api/connections — add a new connection
-				tmpServiceServer.post('/api/connections',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/connections',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -968,7 +970,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// DELETE /api/connections/:name — remove a connection
-				tmpServiceServer.del('/api/connections/:name',
+				tmpServiceServer.del(tmpRoutePrefix + '/api/connections/:name',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -991,7 +993,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// POST /api/connections/:name/test — test a saved connection
-				tmpServiceServer.post('/api/connections/:name/test',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/connections/:name/test',
 					(pRequest, pResponse, fNext) =>
 					{
 						tmpDatabaseProviderFactory.testConnection(pRequest.params.name,
@@ -1014,7 +1016,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// POST /api/connections/test — test an unsaved connection config
-				tmpServiceServer.post('/api/connections/test',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/connections/test',
 					(pRequest, pResponse, fNext) =>
 					{
 						let tmpType = pRequest.body && pRequest.body.Type;
@@ -1047,7 +1049,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 
 				// POST /api/connections/:name/introspect — introspect a saved connection
 				// Optional body: { saveAs: 'schema-name' } — saves introspected schema to library
-				tmpServiceServer.post('/api/connections/:name/introspect',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/connections/:name/introspect',
 					(pRequest, pResponse, fNext) =>
 					{
 						tmpDatabaseProviderFactory.introspectConnection(pRequest.params.name,
@@ -1092,7 +1094,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 
 				// POST /api/schemas/diff — diff two schemas (supports DDL↔DDL, DDL↔DB, DB↔DDL, DB↔DB)
 				// Body: { source?, target?, sourceConnection?, targetConnection? }
-				tmpServiceServer.post('/api/schemas/diff',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/schemas/diff',
 					(pRequest, pResponse, fNext) =>
 					{
 						let tmpSourceName = pRequest.body && pRequest.body.source;
@@ -1216,7 +1218,7 @@ function setupMigrationManagerServer(pOptions, fCallback)
 					});
 
 				// POST /api/schemas/generate-migration — generate SQL migration script
-				tmpServiceServer.post('/api/schemas/generate-migration',
+				tmpServiceServer.post(tmpRoutePrefix + '/api/schemas/generate-migration',
 					(pRequest, pResponse, fNext) =>
 					{
 						try
@@ -1248,12 +1250,22 @@ function setupMigrationManagerServer(pOptions, fCallback)
 
 				// GET / — serve the web UI HTML
 				let tmpHTMLPath = libPath.join(__dirname, 'web', 'index.html');
-				tmpServiceServer.get('/',
-					(pRequest, pResponse, fNext) =>
+
+				let fServeHTML = (pRequest, pResponse, fNext) =>
 					{
 						try
 						{
 							let tmpHTML = libFs.readFileSync(tmpHTMLPath, 'utf8');
+
+							// When a route prefix is set, inject the base path
+							// so the web UI's api() function and script src tags
+							// resolve to the correct prefixed URLs.
+							if (tmpRoutePrefix)
+							{
+								tmpHTML = tmpHTML.replace(/src="\/lib\//g, 'src="' + tmpRoutePrefix + '/lib/');
+								tmpHTML = tmpHTML.replace('<script src=', '<script>window.MIGRATION_MANAGER_BASE=\'' + tmpRoutePrefix + '\';</script>\n<script src=');
+							}
+
 							pResponse.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
 							pResponse.write(tmpHTML);
 							pResponse.end();
@@ -1263,7 +1275,15 @@ function setupMigrationManagerServer(pOptions, fCallback)
 							pResponse.send(500, { Success: false, Error: 'Failed to load web UI.' });
 						}
 						return fNext();
-					});
+					};
+
+				tmpServiceServer.get(tmpRoutePrefix + '/', fServeHTML);
+
+				// Also serve without trailing slash when a prefix is active
+				if (tmpRoutePrefix)
+				{
+					tmpServiceServer.get(tmpRoutePrefix, fServeHTML);
+				}
 
 				// Start the server
 				tmpOrator.startService(

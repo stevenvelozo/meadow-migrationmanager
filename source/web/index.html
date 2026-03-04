@@ -580,12 +580,13 @@ pre.code-block {
 
 	// ---- API helpers ----
 	function api(method, path, body) {
+		var base = window.MIGRATION_MANAGER_BASE || '';
 		var opts = { method: method, headers: {} };
 		if (body) {
 			opts.headers['Content-Type'] = 'application/json';
 			opts.body = JSON.stringify(body);
 		}
-		return fetch(path, opts).then(function(r) { return r.json(); });
+		return fetch(base + path, opts).then(function(r) { return r.json(); });
 	}
 
 	function escapeHTML(str) {
