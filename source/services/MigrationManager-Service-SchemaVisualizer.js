@@ -46,7 +46,7 @@ class MigrationManagerServiceSchemaVisualizer extends libFableServiceBase
 	 */
 	generateTableList(pCompiledSchema)
 	{
-		let tmpTables = Array.isArray(pCompiledSchema.Tables) ? pCompiledSchema.Tables : [];
+		let tmpTables = this._normalizeTables(pCompiledSchema);
 		let tmpLines = [];
 
 		tmpLines.push(`Tables (${tmpTables.length}):`);
@@ -108,54 +108,144 @@ class MigrationManagerServiceSchemaVisualizer extends libFableServiceBase
 	}
 
 	/**
-	 * Generate a formatted map of foreign key relationships.
+	 * Resolve all relationships for a table, including explicit ForeignKeys
+	 * and inferred joins from column-level Join (-> syntax) and TableJoin
+	 * (=> syntax) properties.
 	 *
-	 * Iterates all tables in the compiled schema, inspecting each table's
-	 * ForeignKeys array (if present) to produce output in the format:
-	 *   Foreign Key Relationships:
+	 * @param {Object} pTable - A single table object
+	 * @param {Array}  pAllTables - All tables in the schema (for resolving Join targets)
+	 *
+	 * @return {Array} Array of { Column, ReferencesTable, ReferencesColumn } objects
+	 */
+	_resolveTableRelationships(pTable, pAllTables)
+	{
+		let tmpRelationships = [];
+		let tmpForeignKeys = Array.isArray(pTable.ForeignKeys) ? pTable.ForeignKeys : [];
+		let tmpColumns = Array.isArray(pTable.Columns) ? pTable.Columns : [];
+		let tmpResolvedColumns = {};
+
+		// First: add explicit ForeignKeys entries
+		for (let i = 0; i < tmpForeignKeys.length; i++)
+		{
+			let tmpFK = tmpForeignKeys[i];
+			tmpRelationships.push(tmpFK);
+			tmpResolvedColumns[tmpFK.Column] = true;
+		}
+
+		// Second: infer from column-level Join property (-> syntax)
+		for (let i = 0; i < tmpColumns.length; i++)
+		{
+			let tmpCol = tmpColumns[i];
+
+			// Skip columns already resolved via explicit ForeignKeys
+			if (tmpResolvedColumns[tmpCol.Column])
+			{
+				continue;
+			}
+
+			if (tmpCol.Join)
+			{
+				let tmpJoinColumn = tmpCol.Join;
+
+				// Search all tables for the referenced PK column
+				for (let k = 0; k < pAllTables.length; k++)
+				{
+					let tmpOtherTable = pAllTables[k];
+
+					if (tmpOtherTable.TableName === pTable.TableName)
+					{
+						continue;
+					}
+
+					let tmpOtherCols = Array.isArray(tmpOtherTable.Columns) ? tmpOtherTable.Columns : [];
+
+					for (let m = 0; m < tmpOtherCols.length; m++)
+					{
+						if (tmpOtherCols[m].Column === tmpJoinColumn && tmpOtherCols[m].DataType === 'ID')
+						{
+							tmpRelationships.push(
+							{
+								Column: tmpCol.Column,
+								ReferencesTable: tmpOtherTable.TableName,
+								ReferencesColumn: tmpJoinColumn
+							});
+							tmpResolvedColumns[tmpCol.Column] = true;
+						}
+					}
+				}
+			}
+
+			// Handle TableJoin (=> syntax) — table-level join without column specificity
+			if (tmpCol.TableJoin && !tmpResolvedColumns[tmpCol.Column])
+			{
+				tmpRelationships.push(
+				{
+					Column: tmpCol.Column,
+					ReferencesTable: tmpCol.TableJoin,
+					ReferencesColumn: ''
+				});
+				tmpResolvedColumns[tmpCol.Column] = true;
+			}
+		}
+
+		return tmpRelationships;
+	}
+
+	/**
+	 * Generate a formatted map of relationships between tables.
+	 *
+	 * Detects relationships from three sources:
+	 *   1. Explicit ForeignKeys arrays on table objects
+	 *   2. Column-level Join properties (from MicroDDL -> syntax)
+	 *   3. Column-level TableJoin properties (from MicroDDL => syntax)
+	 *
+	 * Produces output in the format:
+	 *   Relationships:
 	 *     BookAuthorJoin.IDBook    -> Book.IDBook
 	 *     BookAuthorJoin.IDAuthor  -> Author.IDAuthor
 	 *
-	 * Returns "No foreign key relationships found." if no FKs exist.
+	 * Returns "No relationships found." if none exist.
 	 *
-	 * @param {Object} pCompiledSchema - A compiled DDL schema with a Tables array
-	 * @param {Array}  pCompiledSchema.Tables - Array of table objects
+	 * @param {Object} pCompiledSchema - A compiled DDL schema with a Tables array or hash
+	 * @param {Array|Object} pCompiledSchema.Tables - Array or hash of table objects
 	 *
 	 * @return {string} A formatted relationship map string
 	 */
 	generateRelationshipMap(pCompiledSchema)
 	{
-		let tmpTables = Array.isArray(pCompiledSchema.Tables) ? pCompiledSchema.Tables : [];
+		let tmpTables = this._normalizeTables(pCompiledSchema);
 		let tmpRelationships = [];
 
 		for (let i = 0; i < tmpTables.length; i++)
 		{
 			let tmpTable = tmpTables[i];
 			let tmpTableName = tmpTable.TableName || 'Unknown';
-			let tmpForeignKeys = Array.isArray(tmpTable.ForeignKeys) ? tmpTable.ForeignKeys : [];
+			let tmpResolved = this._resolveTableRelationships(tmpTable, tmpTables);
 
-			for (let j = 0; j < tmpForeignKeys.length; j++)
+			for (let j = 0; j < tmpResolved.length; j++)
 			{
-				let tmpFK = tmpForeignKeys[j];
+				let tmpFK = tmpResolved[j];
 				let tmpSourceColumn = tmpFK.Column || 'Unknown';
 				let tmpTargetTable = tmpFK.ReferencesTable || 'Unknown';
-				let tmpTargetColumn = tmpFK.ReferencesColumn || 'Unknown';
+				let tmpTargetColumn = tmpFK.ReferencesColumn || '';
+
+				let tmpTarget = tmpTargetColumn ? `${tmpTargetTable}.${tmpTargetColumn}` : tmpTargetTable;
 
 				tmpRelationships.push(
 				{
 					Source: `${tmpTableName}.${tmpSourceColumn}`,
-					Target: `${tmpTargetTable}.${tmpTargetColumn}`
+					Target: tmpTarget
 				});
 			}
 		}
 
 		if (tmpRelationships.length === 0)
 		{
-			return 'No foreign key relationships found.';
+			return 'No relationships found.';
 		}
 
 		let tmpLines = [];
-		tmpLines.push('Foreign Key Relationships:');
+		tmpLines.push('Relationships:');
 
 		for (let i = 0; i < tmpRelationships.length; i++)
 		{
@@ -164,6 +254,42 @@ class MigrationManagerServiceSchemaVisualizer extends libFableServiceBase
 		}
 
 		return tmpLines.join('\n');
+	}
+
+	/**
+	 * Normalize the Tables property from a compiled schema.
+	 *
+	 * Stricture's Extended JSON returns Tables as a hash keyed by table name,
+	 * while normalized schemas use Tables as an array. This method accepts
+	 * either format and always returns an array.
+	 *
+	 * @param {Object} pCompiledSchema - A compiled schema with Tables
+	 *
+	 * @return {Array} An array of table objects
+	 */
+	_normalizeTables(pCompiledSchema)
+	{
+		let tmpTables = pCompiledSchema ? pCompiledSchema.Tables : [];
+
+		if (Array.isArray(tmpTables))
+		{
+			return tmpTables;
+		}
+
+		if (tmpTables && typeof tmpTables === 'object')
+		{
+			let tmpTableKeys = Object.keys(tmpTables);
+			let tmpResult = [];
+
+			for (let i = 0; i < tmpTableKeys.length; i++)
+			{
+				tmpResult.push(tmpTables[tmpTableKeys[i]]);
+			}
+
+			return tmpResult;
+		}
+
+		return [];
 	}
 
 	/**
@@ -222,7 +348,7 @@ class MigrationManagerServiceSchemaVisualizer extends libFableServiceBase
 	 */
 	generateASCIIDiagram(pCompiledSchema)
 	{
-		let tmpTables = Array.isArray(pCompiledSchema.Tables) ? pCompiledSchema.Tables : [];
+		let tmpTables = this._normalizeTables(pCompiledSchema);
 		let tmpDiagramParts = [];
 
 		for (let i = 0; i < tmpTables.length; i++)

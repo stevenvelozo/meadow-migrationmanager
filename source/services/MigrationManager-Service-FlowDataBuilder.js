@@ -149,8 +149,8 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 				}
 			}
 
-			// Also scan columns with DataType === 'ForeignKey' and Join property
-			// as a fallback when ForeignKeys array is absent
+			// Also scan columns with Join or TableJoin properties as a fallback
+			// when ForeignKeys array is absent
 			if (tmpForeignKeys.length === 0)
 			{
 				let tmpColumns = Array.isArray(tmpTable.Columns) ? tmpTable.Columns : [];
@@ -159,12 +159,9 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 				{
 					let tmpCol = tmpColumns[j];
 
-					if (tmpCol.DataType === 'ForeignKey' && tmpCol.Join)
+					if (tmpCol.Join)
 					{
 						// Join format is the column name of the referenced PK
-						// We need to find which table owns that column
-						// Convention: the Join value is the PK column name (e.g. "IDBook")
-						// and a table named by stripping the "ID" prefix would be the target
 						let tmpJoinColumn = tmpCol.Join;
 
 						// Search other tables for the referenced column
@@ -183,6 +180,25 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 								if (tmpOtherCols[m].Column === tmpJoinColumn && tmpOtherCols[m].DataType === 'ID')
 								{
 									tmpReferenced[tmpOtherTable.TableName + '.' + tmpJoinColumn] = true;
+								}
+							}
+						}
+					}
+					else if (tmpCol.TableJoin)
+					{
+						// TableJoin (=> syntax) — mark the referenced table's PK
+						for (let k = 0; k < pTables.length; k++)
+						{
+							if (pTables[k].TableName === tmpCol.TableJoin)
+							{
+								let tmpOtherCols = Array.isArray(pTables[k].Columns) ? pTables[k].Columns : [];
+
+								for (let m = 0; m < tmpOtherCols.length; m++)
+								{
+									if (tmpOtherCols[m].DataType === 'ID')
+									{
+										tmpReferenced[pTables[k].TableName + '.' + tmpOtherCols[m].Column] = true;
+									}
 								}
 							}
 						}
@@ -212,21 +228,30 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 			tmpFKColumns[tmpForeignKeys[i].Column] = tmpForeignKeys[i];
 		}
 
-		// Fallback: scan columns with DataType === 'ForeignKey'
+		// Fallback: scan columns with Join or TableJoin properties
 		if (tmpForeignKeys.length === 0)
 		{
 			let tmpColumns = Array.isArray(pTable.Columns) ? pTable.Columns : [];
 
 			for (let i = 0; i < tmpColumns.length; i++)
 			{
-				if (tmpColumns[i].DataType === 'ForeignKey')
+				if (tmpColumns[i].Join)
 				{
 					tmpFKColumns[tmpColumns[i].Column] =
 					{
 						Column: tmpColumns[i].Column,
-						ReferencesColumn: tmpColumns[i].Join || tmpColumns[i].Column,
-						// ReferencesTable will be resolved later
-						_JoinColumn: tmpColumns[i].Join || tmpColumns[i].Column
+						ReferencesColumn: tmpColumns[i].Join,
+						_JoinColumn: tmpColumns[i].Join
+					};
+				}
+				else if (tmpColumns[i].TableJoin)
+				{
+					tmpFKColumns[tmpColumns[i].Column] =
+					{
+						Column: tmpColumns[i].Column,
+						ReferencesTable: tmpColumns[i].TableJoin,
+						ReferencesColumn: '',
+						_TableJoin: tmpColumns[i].TableJoin
 					};
 				}
 			}
@@ -292,12 +317,9 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 		let tmpX = LAYOUT_START_X + (tmpCol * LAYOUT_HORIZONTAL_GAP);
 		let tmpY = LAYOUT_START_Y + (tmpRow * (300 + LAYOUT_VERTICAL_GAP));
 
-		// Calculate dynamic height based on column count
-		let tmpHeight = TITLE_BAR_HEIGHT + (tmpColumns.length * COLUMN_ROW_HEIGHT) + 10;
-		if (tmpHeight < 60)
-		{
-			tmpHeight = 60;
-		}
+		// Calculate dynamic height based on port count (cards show a compact
+		// summary; full column details are in the double-click properties panel)
+		let tmpPortCount = 0;
 
 		// Build ports for FK and referenced columns
 		let tmpPorts = [];
@@ -333,6 +355,14 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 			}
 		}
 
+		tmpPortCount = tmpPorts.length;
+		// Height: title bar + enough room for port labels + compact body summary
+		let tmpHeight = TITLE_BAR_HEIGHT + Math.max(tmpPortCount, 2) * COLUMN_ROW_HEIGHT + 16;
+		if (tmpHeight < 80)
+		{
+			tmpHeight = 80;
+		}
+
 		// Build column data for body content rendering
 		let tmpColumnData = [];
 
@@ -361,7 +391,9 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 			Data:
 			{
 				TableName: tmpTableName,
-				Columns: tmpColumnData
+				Columns: tmpColumnData,
+				ColumnCount: tmpColumns.length,
+				FKCount: Object.keys(tmpFKColumns).length
 			}
 		};
 	}
@@ -414,7 +446,7 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 				}
 			}
 
-			// Fallback: use columns with DataType === 'ForeignKey' and Join
+			// Fallback: use columns with Join or TableJoin properties
 			if (tmpForeignKeys.length === 0)
 			{
 				let tmpColumns = Array.isArray(tmpTable.Columns) ? tmpTable.Columns : [];
@@ -423,7 +455,7 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 				{
 					let tmpCol = tmpColumns[j];
 
-					if (tmpCol.DataType === 'ForeignKey' && tmpCol.Join)
+					if (tmpCol.Join)
 					{
 						let tmpJoinColumn = tmpCol.Join;
 
@@ -451,7 +483,7 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 										TargetPortHash: 'port-' + tmpOtherTable.TableName + '-' + tmpJoinColumn + '-in',
 										Data:
 										{
-											Type: 'ForeignKey',
+											Type: 'Join',
 											SourceTable: tmpTableName,
 											SourceColumn: tmpCol.Column,
 											TargetTable: tmpOtherTable.TableName,
@@ -459,6 +491,42 @@ class MigrationManagerServiceFlowDataBuilder extends libFableServiceBase
 										}
 									});
 									tmpConnIndex++;
+								}
+							}
+						}
+					}
+					else if (tmpCol.TableJoin)
+					{
+						// TableJoin (=> syntax) — connect to the target table's PK
+						for (let k = 0; k < pTables.length; k++)
+						{
+							if (pTables[k].TableName === tmpCol.TableJoin)
+							{
+								let tmpOtherTable = pTables[k];
+								let tmpOtherCols = Array.isArray(tmpOtherTable.Columns) ? tmpOtherTable.Columns : [];
+
+								for (let m = 0; m < tmpOtherCols.length; m++)
+								{
+									if (tmpOtherCols[m].DataType === 'ID')
+									{
+										tmpConnections.push(
+										{
+											Hash: 'fk-conn-' + tmpConnIndex,
+											SourceNodeHash: 'table-' + tmpTableName,
+											SourcePortHash: 'port-' + tmpTableName + '-' + tmpCol.Column + '-out',
+											TargetNodeHash: 'table-' + tmpOtherTable.TableName,
+											TargetPortHash: 'port-' + tmpOtherTable.TableName + '-' + tmpOtherCols[m].Column + '-in',
+											Data:
+											{
+												Type: 'TableJoin',
+												SourceTable: tmpTableName,
+												SourceColumn: tmpCol.Column,
+												TargetTable: tmpOtherTable.TableName,
+												TargetColumn: tmpOtherCols[m].Column
+											}
+										});
+										tmpConnIndex++;
+									}
 								}
 							}
 						}

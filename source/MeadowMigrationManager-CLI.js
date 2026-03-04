@@ -1,6 +1,5 @@
-#!/usr/bin/env node
 /**
- * Meadow Migration Manager - CLI Program Entry Point
+ * Meadow Migration Manager - CLI Program Setup
  *
  * Sets up the Commander.js-based CLI using pict-service-commandlineutility.
  * Registers all available subcommands and service types, and handles
@@ -31,7 +30,8 @@ const _MeadowMigrationCLI = new libCLIProgram(
 		DefaultProgramConfiguration:
 		{
 			SchemaLibraryFile: '.meadow-migration-schemas.json',
-			ConnectionLibraryFile: '.meadow-migration-connections.json'
+			ConnectionLibraryFile: '.meadow-migration-connections.json',
+			ModelPath: ''
 		},
 
 		// Configuration file name for cascading config lookup
@@ -55,7 +55,8 @@ const _MeadowMigrationCLI = new libCLIProgram(
 		require('./commands/MigrationManager-Command-Deploy.js'),
 		require('./commands/MigrationManager-Command-Migrate.js'),
 		require('./commands/MigrationManager-Command-GenerateScript.js'),
-		require('./commands/MigrationManager-Command-TUI.js')
+		require('./commands/MigrationManager-Command-TUI.js'),
+		require('./commands/MigrationManager-Command-Serve.js')
 	]);
 
 // Register all service types on the CLI program instance
@@ -65,6 +66,7 @@ _MeadowMigrationCLI.addServiceType('StrictureAdapter', require('./services/Migra
 _MeadowMigrationCLI.addServiceType('MeadowPackageGenerator', require('./services/MigrationManager-Service-MeadowPackageGenerator.js'));
 _MeadowMigrationCLI.addServiceType('SchemaDiff', require('./services/MigrationManager-Service-SchemaDiff.js'));
 _MeadowMigrationCLI.addServiceType('MigrationGenerator', require('./services/MigrationManager-Service-MigrationGenerator.js'));
+_MeadowMigrationCLI.addServiceType('DatabaseProviderFactory', require('./services/MigrationManager-Service-DatabaseProviderFactory.js'));
 _MeadowMigrationCLI.addServiceType('SchemaIntrospector', require('./services/MigrationManager-Service-SchemaIntrospector.js'));
 _MeadowMigrationCLI.addServiceType('SchemaDeployer', require('./services/MigrationManager-Service-SchemaDeployer.js'));
 _MeadowMigrationCLI.addServiceType('SchemaVisualizer', require('./services/MigrationManager-Service-SchemaVisualizer.js'));

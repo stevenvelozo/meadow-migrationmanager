@@ -43,6 +43,7 @@ class MigrationManagerCommandIntrospect extends libCommandLineCommand
 		}
 
 		let tmpConnectionLibrary = this.fable.instantiateServiceProvider('ConnectionLibrary');
+		let tmpDatabaseProviderFactory = this.fable.instantiateServiceProvider('DatabaseProviderFactory');
 
 		tmpConnectionLibrary.loadLibrary(tmpConnectionLibraryFile,
 			(pLoadError) =>
@@ -61,17 +62,75 @@ class MigrationManagerCommandIntrospect extends libCommandLineCommand
 					return fCallback();
 				}
 
-				this.log.info(`Introspection requires a live database connection.`);
-				this.log.info(`Connection: [${tmpConnectionName}]`);
+				this.log.info(`Introspecting database via connection [${tmpConnectionName}]...`);
 				this.log.info(`  Type:     ${tmpConnection.Type}`);
-				this.log.info(`  Server:   ${tmpConnection.Config.server}`);
+				this.log.info(`  Server:   ${tmpConnection.Config.server || tmpConnection.Config.host || '(default)'}`);
 				this.log.info(`  Port:     ${tmpConnection.Config.port || '(default)'}`);
 				this.log.info(`  Database: ${tmpConnection.Config.database || '(not set)'}`);
 				this.log.info('');
-				this.log.info('This feature requires the appropriate database provider package to be installed.');
-				this.log.info('Introspection is not yet available via the CLI.');
 
-				return fCallback();
+				tmpDatabaseProviderFactory.introspectConnection(tmpConnectionName,
+					(pError, pSchema) =>
+					{
+						if (pError)
+						{
+							this.log.error(`Introspection failed: ${pError.message || pError}`);
+							return fCallback();
+						}
+
+						let tmpTableCount = (pSchema && pSchema.Tables) ? pSchema.Tables.length : 0;
+						this.log.info(`Introspection complete — ${tmpTableCount} table(s) discovered.`);
+
+						if (pSchema && pSchema.Tables)
+						{
+							for (let i = 0; i < pSchema.Tables.length; i++)
+							{
+								let tmpTable = pSchema.Tables[i];
+								let tmpColCount = Array.isArray(tmpTable.Columns) ? tmpTable.Columns.length : 0;
+								this.log.info(`  ${tmpTable.TableName} (${tmpColCount} columns)`);
+							}
+						}
+
+						// Optionally save to schema library
+						let tmpOutputName = (this.CommandOptions && this.CommandOptions.output) || '';
+
+						if (tmpOutputName)
+						{
+							let tmpSchemaLibraryFile = this.fable.ProgramConfiguration.SchemaLibraryFile || '.meadow-migration-schemas.json';
+							let tmpSchemaLibrary = this.fable.instantiateServiceProvider('SchemaLibrary');
+
+							// Try to load existing library first
+							tmpSchemaLibrary.loadLibrary(tmpSchemaLibraryFile,
+								(pLibLoadError) =>
+								{
+									// Ignore load errors — we may be creating a new library
+									let tmpEntry = tmpSchemaLibrary.addSchema(tmpOutputName, '');
+
+									// Store the introspected schema as the compiled schema
+									tmpEntry.CompiledSchema = pSchema;
+									tmpEntry.LastCompiled = new Date().toJSON();
+
+									tmpSchemaLibrary.saveLibrary(tmpSchemaLibraryFile,
+										(pSaveError) =>
+										{
+											if (pSaveError)
+											{
+												this.log.error(`Error saving schema library: ${pSaveError.message}`);
+											}
+											else
+											{
+												this.log.info(`Introspected schema saved to library as [${tmpOutputName}].`);
+											}
+
+											return fCallback();
+										});
+								});
+						}
+						else
+						{
+							return fCallback();
+						}
+					});
 			});
 	}
 }

@@ -70,6 +70,7 @@ class MeadowMigrationManager extends libPict
 		this.addServiceType('MigrationGenerator', require('./services/MigrationManager-Service-MigrationGenerator.js'));
 
 		// Database interaction services
+		this.addServiceType('DatabaseProviderFactory', require('./services/MigrationManager-Service-DatabaseProviderFactory.js'));
 		this.addServiceType('SchemaIntrospector', require('./services/MigrationManager-Service-SchemaIntrospector.js'));
 		this.addServiceType('SchemaDeployer', require('./services/MigrationManager-Service-SchemaDeployer.js'));
 

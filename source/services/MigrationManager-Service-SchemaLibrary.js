@@ -10,8 +10,9 @@
  *   {
  *       Name: 'bookstore',
  *       DDL: '...MicroDDL text...',
- *       CompiledSchema: null,       // { Tables: {...} }
- *       MeadowPackages: null,       // Array of Meadow package JSONs
+ *       SourceFilePath: null,        // Absolute path when imported from file
+ *       CompiledSchema: null,        // { Tables: {...} }
+ *       MeadowPackages: null,        // Array of Meadow package JSONs
  *       LastCompiled: null           // ISO timestamp
  *   }
  *
@@ -64,6 +65,7 @@ class MigrationManagerServiceSchemaLibrary extends libFableServiceBase
 		{
 			Name: pName,
 			DDL: pDDLText,
+			SourceFilePath: null,
 			CompiledSchema: null,
 			MeadowPackages: null,
 			LastCompiled: null
@@ -144,6 +146,7 @@ class MigrationManagerServiceSchemaLibrary extends libFableServiceBase
 			let tmpDDLText = libFS.readFileSync(pFilePath, 'utf8');
 			let tmpName = libPath.basename(pFilePath, libPath.extname(pFilePath));
 			let tmpEntry = this.addSchema(tmpName, tmpDDLText);
+			tmpEntry.SourceFilePath = libPath.resolve(pFilePath);
 			this.log.info(`SchemaLibrary: Imported schema from file [${pFilePath}] as [${tmpName}]`);
 			return tmpCallback(null, tmpEntry);
 		}

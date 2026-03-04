@@ -2,9 +2,12 @@
  * Meadow Migration Manager CLI Command - Generate Script
  *
  * Generates a SQL migration script from the differences between two schemas
- * in the library. Optionally writes the script to a file.
+ * in the library. When --connection is given, the named database connection
+ * is introspected and used as the source (current state).
  *
- * Usage: meadow-migration generate-script <source-schema> <target-schema> [-t type] [-o file]
+ * Usage:
+ *   meadow-migration generate-script <source-schema> <target-schema> [-t type] [-o file]
+ *   meadow-migration generate-script --connection <conn> <target-schema> [-t type] [-o file]
  *
  * @license MIT
  * @author Steven Velozo <steven@velozo.com>
@@ -23,7 +26,7 @@ class MigrationManagerCommandGenerateScript extends libCommandLineCommand
 		this.options.Aliases.push('gs');
 
 		this.options.CommandArguments.push(
-			{ Name: '[source-schema]', Description: 'Source schema name.', Default: '' });
+			{ Name: '[source-schema]', Description: 'Source schema name (or target when using --connection).', Default: '' });
 		this.options.CommandArguments.push(
 			{ Name: '[target-schema]', Description: 'Target schema name.', Default: '' });
 
@@ -31,21 +34,59 @@ class MigrationManagerCommandGenerateScript extends libCommandLineCommand
 			{ Name: '-t, --type <type>', Description: 'Database type (MySQL, PostgreSQL, MSSQL, SQLite).', Default: 'MySQL' });
 		this.options.CommandOptions.push(
 			{ Name: '-o, --output <file>', Description: 'Output file path.', Default: '' });
+		this.options.CommandOptions.push(
+			{ Name: '-c, --connection <name>', Description: 'Use a database connection as the source (current state).', Default: '' });
 
 		this.addCommand();
+	}
+
+	/**
+	 * Normalize a compiled schema's Tables property from hash to array.
+	 */
+	_normalizeCompiledSchema(pCompiledSchema)
+	{
+		let tmpResult = { Tables: [] };
+
+		if (pCompiledSchema && pCompiledSchema.Tables)
+		{
+			if (Array.isArray(pCompiledSchema.Tables))
+			{
+				tmpResult.Tables = pCompiledSchema.Tables;
+			}
+			else
+			{
+				let tmpTableKeys = Object.keys(pCompiledSchema.Tables);
+				for (let i = 0; i < tmpTableKeys.length; i++)
+				{
+					tmpResult.Tables.push(pCompiledSchema.Tables[tmpTableKeys[i]]);
+				}
+			}
+		}
+
+		return tmpResult;
 	}
 
 	onRunAsync(fCallback)
 	{
 		let tmpSchemaLibraryFile = this.fable.ProgramConfiguration.SchemaLibraryFile || '.meadow-migration-schemas.json';
+		let tmpConnectionLibraryFile = this.fable.ProgramConfiguration.ConnectionLibraryFile || '.meadow-migration-connections.json';
 
 		let tmpArgs = (typeof (this.ArgumentString) === 'string') ? this.ArgumentString.trim().split(/\s+/) : [];
-		let tmpSourceName = tmpArgs[0] || '';
-		let tmpTargetName = tmpArgs[1] || '';
+		let tmpConnectionName = (this.CommandOptions && this.CommandOptions.connection) || '';
 
-		if (!tmpSourceName || !tmpTargetName)
+		// When using --connection, the first arg is the target schema
+		let tmpSourceName = tmpConnectionName ? '' : (tmpArgs[0] || '');
+		let tmpTargetName = tmpConnectionName ? (tmpArgs[0] || '') : (tmpArgs[1] || '');
+
+		if (!tmpConnectionName && (!tmpSourceName || !tmpTargetName))
 		{
-			this.log.error('Both <source-schema> and <target-schema> arguments are required.');
+			this.log.error('Both <source-schema> and <target-schema> arguments are required (or use --connection for source).');
+			return fCallback();
+		}
+
+		if (tmpConnectionName && !tmpTargetName)
+		{
+			this.log.error('A <target-schema> argument is required when using --connection.');
 			return fCallback();
 		}
 
@@ -53,6 +94,7 @@ class MigrationManagerCommandGenerateScript extends libCommandLineCommand
 		let tmpOutputFile = (this.CommandOptions && this.CommandOptions.output) || '';
 
 		let tmpSchemaLibrary = this.fable.instantiateServiceProvider('SchemaLibrary');
+		let tmpStrictureAdapter = this.fable.instantiateServiceProvider('StrictureAdapter');
 
 		tmpSchemaLibrary.loadLibrary(tmpSchemaLibraryFile,
 			(pLoadError) =>
@@ -63,107 +105,103 @@ class MigrationManagerCommandGenerateScript extends libCommandLineCommand
 					return fCallback();
 				}
 
-				let tmpSourceEntry = tmpSchemaLibrary.getSchema(tmpSourceName);
-				let tmpTargetEntry = tmpSchemaLibrary.getSchema(tmpTargetName);
-
-				if (!tmpSourceEntry)
+				// Resolve source schema
+				let fResolveSource = (fNext) =>
 				{
-					this.log.error(`Source schema [${tmpSourceName}] not found in library.`);
-					return fCallback();
-				}
-				if (!tmpTargetEntry)
-				{
-					this.log.error(`Target schema [${tmpTargetName}] not found in library.`);
-					return fCallback();
-				}
-
-				let tmpStrictureAdapter = this.fable.instantiateServiceProvider('StrictureAdapter');
-
-				// Compile source if needed
-				let fCompileSource = (fNext) =>
-				{
-					if (tmpSourceEntry.CompiledSchema)
+					if (tmpConnectionName)
 					{
-						return fNext(null, tmpSourceEntry.CompiledSchema);
-					}
+						let tmpConnectionLibrary = this.fable.instantiateServiceProvider('ConnectionLibrary');
+						let tmpDatabaseProviderFactory = this.fable.instantiateServiceProvider('DatabaseProviderFactory');
 
-					tmpStrictureAdapter.compileDDL(tmpSourceEntry.DDL,
-						(pError, pSchema) =>
-						{
-							if (pError)
+						tmpConnectionLibrary.loadLibrary(tmpConnectionLibraryFile,
+							(pConnLoadError) =>
 							{
-								return fNext(pError);
-							}
-							tmpSourceEntry.CompiledSchema = pSchema;
-							tmpSourceEntry.LastCompiled = new Date().toJSON();
-							return fNext(null, pSchema);
-						});
+								if (pConnLoadError)
+								{
+									return fNext(new Error(`Error loading connection library: ${pConnLoadError.message}`));
+								}
+
+								this.log.info(`Introspecting database [${tmpConnectionName}] as source...`);
+
+								tmpDatabaseProviderFactory.introspectConnection(tmpConnectionName,
+									(pError, pSchema) =>
+									{
+										if (pError) return fNext(pError);
+										return fNext(null, pSchema);
+									});
+							});
+					}
+					else
+					{
+						let tmpSourceEntry = tmpSchemaLibrary.getSchema(tmpSourceName);
+
+						if (!tmpSourceEntry)
+						{
+							return fNext(new Error(`Source schema [${tmpSourceName}] not found in library.`));
+						}
+
+						if (tmpSourceEntry.CompiledSchema)
+						{
+							return fNext(null, this._normalizeCompiledSchema(tmpSourceEntry.CompiledSchema));
+						}
+
+						tmpStrictureAdapter.compileDDL(tmpSourceEntry.DDL,
+							(pError, pSchema) =>
+							{
+								if (pError) return fNext(pError);
+								tmpSourceEntry.CompiledSchema = pSchema;
+								tmpSourceEntry.LastCompiled = new Date().toJSON();
+								return fNext(null, this._normalizeCompiledSchema(pSchema));
+							});
+					}
 				};
 
-				// Compile target if needed
-				let fCompileTarget = (fNext) =>
+				// Resolve target schema
+				let fResolveTarget = (fNext) =>
 				{
+					let tmpTargetEntry = tmpSchemaLibrary.getSchema(tmpTargetName);
+
+					if (!tmpTargetEntry)
+					{
+						return fNext(new Error(`Target schema [${tmpTargetName}] not found in library.`));
+					}
+
 					if (tmpTargetEntry.CompiledSchema)
 					{
-						return fNext(null, tmpTargetEntry.CompiledSchema);
+						return fNext(null, this._normalizeCompiledSchema(tmpTargetEntry.CompiledSchema));
 					}
 
 					tmpStrictureAdapter.compileDDL(tmpTargetEntry.DDL,
 						(pError, pSchema) =>
 						{
-							if (pError)
-							{
-								return fNext(pError);
-							}
+							if (pError) return fNext(pError);
 							tmpTargetEntry.CompiledSchema = pSchema;
 							tmpTargetEntry.LastCompiled = new Date().toJSON();
-							return fNext(null, pSchema);
+							return fNext(null, this._normalizeCompiledSchema(pSchema));
 						});
 				};
 
-				fCompileSource(
+				fResolveSource(
 					(pSourceError, pSourceSchema) =>
 					{
 						if (pSourceError)
 						{
-							this.log.error(`Error compiling source schema [${tmpSourceName}]: ${pSourceError.message}`);
+							this.log.error(`Error resolving source: ${pSourceError.message}`);
 							return fCallback();
 						}
 
-						fCompileTarget(
+						fResolveTarget(
 							(pTargetError, pTargetSchema) =>
 							{
 								if (pTargetError)
 								{
-									this.log.error(`Error compiling target schema [${tmpTargetName}]: ${pTargetError.message}`);
+									this.log.error(`Error resolving target: ${pTargetError.message}`);
 									return fCallback();
-								}
-
-								// Convert compiled schemas to Tables arrays for diffing
-								let tmpSourceTables = { Tables: [] };
-								let tmpTargetTables = { Tables: [] };
-
-								if (pSourceSchema && pSourceSchema.Tables)
-								{
-									let tmpTableKeys = Object.keys(pSourceSchema.Tables);
-									for (let i = 0; i < tmpTableKeys.length; i++)
-									{
-										tmpSourceTables.Tables.push(pSourceSchema.Tables[tmpTableKeys[i]]);
-									}
-								}
-
-								if (pTargetSchema && pTargetSchema.Tables)
-								{
-									let tmpTableKeys = Object.keys(pTargetSchema.Tables);
-									for (let i = 0; i < tmpTableKeys.length; i++)
-									{
-										tmpTargetTables.Tables.push(pTargetSchema.Tables[tmpTableKeys[i]]);
-									}
 								}
 
 								// Diff the schemas
 								let tmpSchemaDiff = this.fable.instantiateServiceProvider('SchemaDiff');
-								let tmpDiffResult = tmpSchemaDiff.diffSchemas(tmpSourceTables, tmpTargetTables);
+								let tmpDiffResult = tmpSchemaDiff.diffSchemas(pSourceSchema, pTargetSchema);
 
 								// Generate the migration script
 								let tmpMigrationGenerator = this.fable.instantiateServiceProvider('MigrationGenerator');

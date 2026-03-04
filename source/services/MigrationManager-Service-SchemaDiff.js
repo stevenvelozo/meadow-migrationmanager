@@ -31,10 +31,96 @@ class MigrationManagerServiceSchemaDiff extends libFableServiceBase
 	}
 
 	/**
+	 * Resolve all relationships for a table, including explicit ForeignKeys
+	 * and inferred joins from column-level Join (-> syntax) and TableJoin
+	 * (=> syntax) properties.
+	 *
+	 * @param {Object} pTable - A single table object
+	 * @param {Array}  pAllTables - All tables in the schema (for resolving Join targets)
+	 *
+	 * @return {Array} Array of { Column, ReferencesTable, ReferencesColumn } objects
+	 */
+	_resolveTableRelationships(pTable, pAllTables)
+	{
+		let tmpRelationships = [];
+		let tmpForeignKeys = Array.isArray(pTable.ForeignKeys) ? pTable.ForeignKeys : [];
+		let tmpColumns = Array.isArray(pTable.Columns) ? pTable.Columns : [];
+		let tmpResolvedColumns = {};
+
+		// First: add explicit ForeignKeys entries
+		for (let i = 0; i < tmpForeignKeys.length; i++)
+		{
+			let tmpFK = tmpForeignKeys[i];
+			tmpRelationships.push(tmpFK);
+			tmpResolvedColumns[tmpFK.Column] = true;
+		}
+
+		// Second: infer from column-level Join property (-> syntax)
+		for (let i = 0; i < tmpColumns.length; i++)
+		{
+			let tmpCol = tmpColumns[i];
+
+			// Skip columns already resolved via explicit ForeignKeys
+			if (tmpResolvedColumns[tmpCol.Column])
+			{
+				continue;
+			}
+
+			if (tmpCol.Join)
+			{
+				let tmpJoinColumn = tmpCol.Join;
+
+				// Search all tables for the referenced PK column
+				for (let k = 0; k < pAllTables.length; k++)
+				{
+					let tmpOtherTable = pAllTables[k];
+
+					if (tmpOtherTable.TableName === pTable.TableName)
+					{
+						continue;
+					}
+
+					let tmpOtherCols = Array.isArray(tmpOtherTable.Columns) ? tmpOtherTable.Columns : [];
+
+					for (let m = 0; m < tmpOtherCols.length; m++)
+					{
+						if (tmpOtherCols[m].Column === tmpJoinColumn && tmpOtherCols[m].DataType === 'ID')
+						{
+							tmpRelationships.push(
+							{
+								Column: tmpCol.Column,
+								ReferencesTable: tmpOtherTable.TableName,
+								ReferencesColumn: tmpJoinColumn
+							});
+							tmpResolvedColumns[tmpCol.Column] = true;
+						}
+					}
+				}
+			}
+
+			// Handle TableJoin (=> syntax) — table-level join without column specificity
+			if (tmpCol.TableJoin && !tmpResolvedColumns[tmpCol.Column])
+			{
+				tmpRelationships.push(
+				{
+					Column: tmpCol.Column,
+					ReferencesTable: tmpCol.TableJoin,
+					ReferencesColumn: ''
+				});
+				tmpResolvedColumns[tmpCol.Column] = true;
+			}
+		}
+
+		return tmpRelationships;
+	}
+
+	/**
 	 * Compare two DDL-level schemas and return a structured diff.
 	 *
 	 * Each schema is expected to have a `Tables` array where each entry has
-	 * `TableName`, `Columns`, `Indices`, and `ForeignKeys` properties.
+	 * `TableName`, `Columns`, `Indices`, and optionally `ForeignKeys` properties.
+	 * Relationships can also be inferred from column-level Join and TableJoin
+	 * properties (MicroDDL -> and => syntax).
 	 *
 	 * @param {Object} pSourceSchema - The source (existing) schema
 	 * @param {Object} pSourceSchema.Tables - Array of table objects in the source
@@ -92,7 +178,7 @@ class MigrationManagerServiceSchemaDiff extends libFableServiceBase
 
 			if (tmpSourceTableMap.hasOwnProperty(tmpTableName))
 			{
-				let tmpTableDiff = this.diffTables(tmpSourceTableMap[tmpTableName], tmpTargetTableMap[tmpTableName]);
+				let tmpTableDiff = this.diffTables(tmpSourceTableMap[tmpTableName], tmpTargetTableMap[tmpTableName], tmpSourceTables, tmpTargetTables);
 
 				if (this.hasChanges(tmpTableDiff))
 				{
@@ -108,22 +194,19 @@ class MigrationManagerServiceSchemaDiff extends libFableServiceBase
 	 * Compare a single source table to a single target table.
 	 *
 	 * Produces a detailed diff of columns (added, removed, modified),
-	 * indices (added, removed), and foreign keys (added, removed).
+	 * indices (added, removed), and foreign keys / relationships (added, removed).
+	 *
+	 * Relationships are resolved from both explicit ForeignKeys arrays and
+	 * column-level Join / TableJoin properties (MicroDDL -> and => syntax).
 	 *
 	 * @param {Object} pSourceTable - The source table definition
-	 * @param {Object} pSourceTable.TableName - The name of the table
-	 * @param {Array}  pSourceTable.Columns - Array of column objects
-	 * @param {Array}  pSourceTable.Indices - Array of index objects
-	 * @param {Array}  pSourceTable.ForeignKeys - Array of foreign key objects
 	 * @param {Object} pTargetTable - The target table definition
-	 * @param {Object} pTargetTable.TableName - The name of the table
-	 * @param {Array}  pTargetTable.Columns - Array of column objects
-	 * @param {Array}  pTargetTable.Indices - Array of index objects
-	 * @param {Array}  pTargetTable.ForeignKeys - Array of foreign key objects
+	 * @param {Array}  [pSourceAllTables] - All source tables (for Join resolution)
+	 * @param {Array}  [pTargetAllTables] - All target tables (for Join resolution)
 	 *
 	 * @return {Object} A table-level diff result
 	 */
-	diffTables(pSourceTable, pTargetTable)
+	diffTables(pSourceTable, pTargetTable, pSourceAllTables, pTargetAllTables)
 	{
 		let tmpTableDiff = {
 			TableName: pTargetTable.TableName,
@@ -260,9 +343,11 @@ class MigrationManagerServiceSchemaDiff extends libFableServiceBase
 			}
 		}
 
-		// -- Diff foreign keys --
-		let tmpSourceForeignKeys = Array.isArray(pSourceTable.ForeignKeys) ? pSourceTable.ForeignKeys : [];
-		let tmpTargetForeignKeys = Array.isArray(pTargetTable.ForeignKeys) ? pTargetTable.ForeignKeys : [];
+		// -- Diff foreign keys / relationships --
+		let tmpSourceAllTables = Array.isArray(pSourceAllTables) ? pSourceAllTables : [pSourceTable];
+		let tmpTargetAllTables = Array.isArray(pTargetAllTables) ? pTargetAllTables : [pTargetTable];
+		let tmpSourceForeignKeys = this._resolveTableRelationships(pSourceTable, tmpSourceAllTables);
+		let tmpTargetForeignKeys = this._resolveTableRelationships(pTargetTable, tmpTargetAllTables);
 
 		let tmpSourceFKMap = {};
 		for (let i = 0; i < tmpSourceForeignKeys.length; i++)

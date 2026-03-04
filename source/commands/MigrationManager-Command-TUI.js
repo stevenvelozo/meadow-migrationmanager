@@ -39,6 +39,9 @@ class MigrationManagerCommandTUI extends libCommandLineCommand
 			tmpMM.AppData.MigrationManager = this.fable.AppData.MigrationManager;
 		}
 
+		// Load connections from cascading configuration into the TUI instance
+		tmpConnectionLibrary.loadFromConfiguration();
+
 		let tmpTUIApp = require('../tui/MigrationManager-TUI-App.js');
 		let tmpApp = tmpMM.addApplication(tmpTUIApp.name || 'MigrationManagerTUIApplication', {}, tmpTUIApp);
 

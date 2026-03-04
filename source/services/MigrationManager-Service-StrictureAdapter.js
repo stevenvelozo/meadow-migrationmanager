@@ -80,8 +80,8 @@ class MigrationManagerServiceStrictureAdapter extends libFableServiceBase
 
 		this.log.info('StrictureAdapter: Compiling DDL via Stricture...');
 
-		// Instantiate the Stricture compiler
-		let tmpStricture = new libStricture({});
+		// Instantiate the Stricture compiler, passing Product so log context is correct
+		let tmpStricture = new libStricture({ Product: this.fable.settings.Product || 'MeadowMigrationManager' });
 		let tmpCompiler = tmpStricture.instantiateServiceProvider('StrictureCompiler');
 
 		tmpCompiler.compileFile(tmpInputFile, tmpOutputLocation, tmpOutputPrefix,
@@ -109,6 +109,98 @@ class MigrationManagerServiceStrictureAdapter extends libFableServiceBase
 					this.log.error(`StrictureAdapter: Error reading compiled output [${tmpExtendedFile}]: ${tmpReadError}`);
 					return tmpCallback(tmpReadError);
 				}
+			});
+	}
+
+	/**
+	 * Compile a MicroDDL file directly from its path on disk.
+	 *
+	 * Unlike compileDDL (which writes text to a temp file), this method compiles
+	 * from the original file in place so that [Include ...] directives resolve
+	 * correctly relative to the source directory. Only the output is written
+	 * to a temporary directory.
+	 *
+	 * @param {string} pFilePath - Absolute path to the .mddl / .ddl file
+	 * @param {function} fCallback - Callback invoked as fCallback(pError, pSchema)
+	 */
+	compileDDLFile(pFilePath, fCallback)
+	{
+		let tmpCallback = (typeof (fCallback) === 'function') ? fCallback : () => {};
+
+		let tmpTempDir = libPath.join(libOS.tmpdir(), 'meadow-migrationmanager-' + Date.now());
+		let tmpOutputLocation = libPath.join(tmpTempDir, 'output') + libPath.sep;
+		let tmpOutputPrefix = 'CompiledSchema';
+
+		try
+		{
+			// Only need a temp directory for the output
+			libMkdirp.sync(tmpOutputLocation);
+		}
+		catch (tmpError)
+		{
+			this.log.error(`StrictureAdapter: Error setting up output directory: ${tmpError}`);
+			return tmpCallback(tmpError);
+		}
+
+		this.log.info(`StrictureAdapter: Compiling DDL file [${pFilePath}] via Stricture...`);
+
+		// Instantiate the Stricture compiler, passing Product so log context is correct
+		let tmpStricture = new libStricture({ Product: this.fable.settings.Product || 'MeadowMigrationManager' });
+		let tmpCompiler = tmpStricture.instantiateServiceProvider('StrictureCompiler');
+
+		tmpCompiler.compileFile(pFilePath, tmpOutputLocation, tmpOutputPrefix,
+			(pError) =>
+			{
+				if (pError)
+				{
+					this.log.error(`StrictureAdapter: Stricture compilation error: ${pError}`);
+					return tmpCallback(pError);
+				}
+
+				// Read the Extended JSON output
+				let tmpExtendedFile = tmpOutputLocation + tmpOutputPrefix + '-Extended.json';
+
+				try
+				{
+					let tmpRawJSON = libFS.readFileSync(tmpExtendedFile, 'utf8');
+					let tmpSchema = JSON.parse(tmpRawJSON);
+
+					this.log.info('StrictureAdapter: DDL file compilation successful.');
+					return tmpCallback(null, tmpSchema);
+				}
+				catch (tmpReadError)
+				{
+					this.log.error(`StrictureAdapter: Error reading compiled output [${tmpExtendedFile}]: ${tmpReadError}`);
+					return tmpCallback(tmpReadError);
+				}
+			});
+	}
+
+	/**
+	 * Compile a DDL file and generate Meadow packages in a single operation.
+	 *
+	 * Uses compileDDLFile for correct [Include ...] resolution, then
+	 * generateMeadowPackages to build the Meadow package JSON objects.
+	 *
+	 * @param {string} pFilePath - Absolute path to the .mddl / .ddl file
+	 * @param {function} fCallback - Callback invoked as fCallback(pError, pCompiledSchema, pMeadowPackages)
+	 */
+	compileFileAndGenerate(pFilePath, fCallback)
+	{
+		let tmpCallback = (typeof (fCallback) === 'function') ? fCallback : () => {};
+
+		this.compileDDLFile(pFilePath,
+			(pError, pCompiledSchema) =>
+			{
+				if (pError)
+				{
+					return tmpCallback(pError);
+				}
+
+				let tmpMeadowPackages = this.generateMeadowPackages(pCompiledSchema);
+
+				this.log.info('StrictureAdapter: File compile and generate complete.');
+				return tmpCallback(null, pCompiledSchema, tmpMeadowPackages);
 			});
 	}
 

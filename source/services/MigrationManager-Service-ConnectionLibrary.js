@@ -158,7 +158,9 @@ class MigrationManagerServiceConnectionLibrary extends libFableServiceBase
 	/**
 	 * Load the connection library from a JSON file on disk.
 	 *
-	 * Replaces the current Connections hash with the contents of the file.
+	 * Replaces the current Connections hash with the contents of the file,
+	 * then merges in any connections defined in ProgramConfiguration.Connections
+	 * from the cascading config (.meadow-migration-config.json).
 	 *
 	 * @param {string} pFilePath - Path to the input JSON file
 	 * @param {function} fCallback - Callback invoked as fCallback(pError)
@@ -174,14 +176,87 @@ class MigrationManagerServiceConnectionLibrary extends libFableServiceBase
 			{
 				if (pError)
 				{
-					this.log.error(`ConnectionLibrary: Error loading library from [${pFilePath}]: ${pError}`);
-					return tmpCallback(pError);
+					// File not found or unreadable is not fatal — config connections
+					// may still be available
+					this.log.warn(`ConnectionLibrary: Could not load library from [${pFilePath}]: ${pError.message || pError}`);
+				}
+				else
+				{
+					this.fable.AppData.MigrationManager.Connections = pData;
+					this.log.info(`ConnectionLibrary: Library loaded successfully from [${pFilePath}]`);
 				}
 
-				this.fable.AppData.MigrationManager.Connections = pData;
-				this.log.info(`ConnectionLibrary: Library loaded successfully from [${pFilePath}]`);
+				// Merge in any connections from cascading configuration
+				this.loadFromConfiguration();
+
 				return tmpCallback(null);
 			});
+	}
+
+	/**
+	 * Merge connections from the cascading ProgramConfiguration into the library.
+	 *
+	 * Reads ProgramConfiguration.Connections (a hash of connection entries)
+	 * and adds each one to the in-memory library. File-loaded connections
+	 * take precedence — config connections only fill in entries that don't
+	 * already exist.
+	 *
+	 * Configuration format (.meadow-migration-config.json):
+	 *   {
+	 *       "Connections": {
+	 *           "my-db": {
+	 *               "Type": "MySQL",
+	 *               "Config": {
+	 *                   "server": "localhost",
+	 *                   "port": 3306,
+	 *                   "user": "root",
+	 *                   "password": "...",
+	 *                   "database": "mydb"
+	 *               }
+	 *           }
+	 *       }
+	 *   }
+	 */
+	loadFromConfiguration()
+	{
+		let tmpProgramConfig = this.fable.ProgramConfiguration || this.fable.settings.ProgramConfiguration;
+
+		if (!tmpProgramConfig || typeof tmpProgramConfig.Connections !== 'object')
+		{
+			return;
+		}
+
+		let tmpConfigConnections = tmpProgramConfig.Connections;
+		let tmpConnections = this.fable.AppData.MigrationManager.Connections;
+		let tmpNames = Object.keys(tmpConfigConnections);
+
+		for (let i = 0; i < tmpNames.length; i++)
+		{
+			let tmpName = tmpNames[i];
+
+			// Don't overwrite connections loaded from the library file
+			if (tmpConnections.hasOwnProperty(tmpName))
+			{
+				continue;
+			}
+
+			let tmpEntry = tmpConfigConnections[tmpName];
+
+			if (!tmpEntry || !tmpEntry.Type || !tmpEntry.Config)
+			{
+				this.log.warn(`ConnectionLibrary: Skipping invalid config connection [${tmpName}] — requires Type and Config.`);
+				continue;
+			}
+
+			tmpConnections[tmpName] =
+			{
+				Name: tmpName,
+				Type: tmpEntry.Type,
+				Config: tmpEntry.Config
+			};
+
+			this.log.info(`ConnectionLibrary: Loaded connection [${tmpName}] from configuration.`);
+		}
 	}
 }
 

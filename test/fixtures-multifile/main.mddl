@@ -1,0 +1,9 @@
+// Main schema file with includes
+!User
+@IDUser
+$Username 128
+$Email 254
+$PasswordHash 512
+
+[Include tables/posts.mddl]
+[Include tables/comments.mddl]

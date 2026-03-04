@@ -233,6 +233,83 @@ suite
 						libAssert.strictEqual(tmpConnLib.removeConnection('to-remove'), false);
 					}
 				);
+
+				test
+				(
+					'Should load connections from ProgramConfiguration',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager(
+							{
+								ProgramConfiguration:
+								{
+									Connections:
+									{
+										'config-mysql':
+										{
+											Type: 'MySQL',
+											Config: { server: 'localhost', port: 3306, user: 'root', database: 'testdb' }
+										},
+										'config-pg':
+										{
+											Type: 'PostgreSQL',
+											Config: { server: '10.0.0.1', port: 5432, user: 'admin', database: 'app' }
+										}
+									}
+								}
+							});
+						let tmpConnLib = tmpManager.instantiateServiceProvider('ConnectionLibrary');
+
+						// loadFromConfiguration should pull connections from ProgramConfiguration
+						tmpConnLib.loadFromConfiguration();
+
+						let tmpNames = tmpConnLib.listConnections();
+						libAssert.strictEqual(tmpNames.length, 2);
+
+						let tmpMySQL = tmpConnLib.getConnection('config-mysql');
+						libAssert.ok(tmpMySQL, 'config-mysql should exist');
+						libAssert.strictEqual(tmpMySQL.Type, 'MySQL');
+						libAssert.strictEqual(tmpMySQL.Config.database, 'testdb');
+
+						let tmpPG = tmpConnLib.getConnection('config-pg');
+						libAssert.ok(tmpPG, 'config-pg should exist');
+						libAssert.strictEqual(tmpPG.Type, 'PostgreSQL');
+						libAssert.strictEqual(tmpPG.Config.server, '10.0.0.1');
+					}
+				);
+
+				test
+				(
+					'Should not overwrite existing connections with config connections',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager(
+							{
+								ProgramConfiguration:
+								{
+									Connections:
+									{
+										'my-db':
+										{
+											Type: 'PostgreSQL',
+											Config: { server: 'config-server', database: 'config-db' }
+										}
+									}
+								}
+							});
+						let tmpConnLib = tmpManager.instantiateServiceProvider('ConnectionLibrary');
+
+						// Add a connection manually first
+						tmpConnLib.addConnection('my-db', 'MySQL', { server: 'file-server', database: 'file-db' });
+
+						// Now load from config — should NOT overwrite the existing entry
+						tmpConnLib.loadFromConfiguration();
+
+						let tmpConn = tmpConnLib.getConnection('my-db');
+						libAssert.strictEqual(tmpConn.Type, 'MySQL', 'Should keep original type (MySQL not PostgreSQL)');
+						libAssert.strictEqual(tmpConn.Config.server, 'file-server', 'Should keep original server');
+					}
+				);
 			}
 		);
 
@@ -667,6 +744,34 @@ suite
 						libAssert.strictEqual(tmpResult.TablesModified[0].ForeignKeysRemoved[0].Column, 'IDBook');
 					}
 				);
+
+				test
+				(
+					'Should detect relationships from Join column properties (-> syntax)',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpDiff = tmpManager.instantiateServiceProvider('SchemaDiff');
+
+						// Source has no FK on Review
+						let tmpSource = { Tables: [
+							{ TableName: 'Book', Columns: [{ Column: 'IDBook', DataType: 'ID' }, { Column: 'Title', DataType: 'String' }] },
+							{ TableName: 'Review', Columns: [{ Column: 'IDReview', DataType: 'ID' }, { Column: 'Text', DataType: 'Text' }] }
+						]};
+						// Target adds IDBook FK via Join property (from -> syntax)
+						let tmpTarget = { Tables: [
+							{ TableName: 'Book', Columns: [{ Column: 'IDBook', DataType: 'ID' }, { Column: 'Title', DataType: 'String' }] },
+							{ TableName: 'Review', Columns: [{ Column: 'IDReview', DataType: 'ID' }, { Column: 'Text', DataType: 'Text' },
+								{ Column: 'IDBook', DataType: 'ForeignKey', Join: 'IDBook' }] }
+						]};
+
+						let tmpResult = tmpDiff.diffSchemas(tmpSource, tmpTarget);
+						libAssert.strictEqual(tmpResult.TablesModified.length, 1, 'Review should be modified');
+						libAssert.strictEqual(tmpResult.TablesModified[0].ColumnsAdded.length, 1, 'IDBook column should be added');
+						libAssert.strictEqual(tmpResult.TablesModified[0].ForeignKeysAdded.length, 1, 'FK inferred from Join should be detected');
+						libAssert.strictEqual(tmpResult.TablesModified[0].ForeignKeysAdded[0].ReferencesTable, 'Book');
+					}
+				);
 			}
 		);
 
@@ -708,7 +813,7 @@ suite
 
 				test
 				(
-					'Should generate DROP TABLE for removed tables',
+					'Should ignore removed tables (no DROP TABLE)',
 					function ()
 					{
 						let tmpManager = new libMeadowMigrationManager({});
@@ -721,9 +826,7 @@ suite
 						};
 
 						let tmpStatements = tmpMigGen.generateMigrationStatements(tmpDiff, 'PostgreSQL');
-						libAssert.strictEqual(tmpStatements.length, 1);
-						libAssert.ok(tmpStatements[0].indexOf('DROP TABLE IF EXISTS') >= 0);
-						libAssert.ok(tmpStatements[0].indexOf('"OldTable"') >= 0, 'Should use double-quote quoting for PostgreSQL');
+						libAssert.strictEqual(tmpStatements.length, 0, 'Removed tables should not generate any statements');
 					}
 				);
 
@@ -934,7 +1037,7 @@ suite
 						let tmpViz = tmpManager.instantiateServiceProvider('SchemaVisualizer');
 
 						let tmpOutput = tmpViz.generateRelationshipMap(_TestSchema);
-						libAssert.ok(tmpOutput.indexOf('Foreign Key Relationships') >= 0);
+						libAssert.ok(tmpOutput.indexOf('Relationships') >= 0);
 						libAssert.ok(tmpOutput.indexOf('BookAuthorJoin.IDBook') >= 0);
 						libAssert.ok(tmpOutput.indexOf('Book.IDBook') >= 0);
 						libAssert.ok(tmpOutput.indexOf('Author.IDAuthor') >= 0);
@@ -950,7 +1053,7 @@ suite
 						let tmpViz = tmpManager.instantiateServiceProvider('SchemaVisualizer');
 
 						let tmpOutput = tmpViz.generateRelationshipMap({ Tables: [{ TableName: 'Simple', Columns: [], ForeignKeys: [] }] });
-						libAssert.ok(tmpOutput.indexOf('No foreign key relationships found') >= 0);
+						libAssert.ok(tmpOutput.indexOf('No relationships found') >= 0);
 					}
 				);
 
@@ -968,6 +1071,137 @@ suite
 						libAssert.ok(tmpOutput.indexOf('[PK]') >= 0, 'Should show PK abbreviation');
 						libAssert.ok(tmpOutput.indexOf('STR') >= 0, 'Should show STR abbreviation');
 						libAssert.ok(tmpOutput.indexOf('FK') >= 0, 'Should show FK abbreviation');
+					}
+				);
+
+				test
+				(
+					'Should detect relationships from column Join property (-> syntax)',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpViz = tmpManager.instantiateServiceProvider('SchemaVisualizer');
+
+						// Schema using Join properties instead of ForeignKeys arrays
+						let tmpSchema = {
+							Tables: [
+								{
+									TableName: 'Book',
+									Columns: [
+										{ Column: 'IDBook', DataType: 'ID' },
+										{ Column: 'Title', DataType: 'String', Size: '200' }
+									]
+								},
+								{
+									TableName: 'Author',
+									Columns: [
+										{ Column: 'IDAuthor', DataType: 'ID' },
+										{ Column: 'Name', DataType: 'String', Size: '200' }
+									]
+								},
+								{
+									TableName: 'BookAuthorJoin',
+									Columns: [
+										{ Column: 'IDBookAuthorJoin', DataType: 'ID' },
+										{ Column: 'IDBook', DataType: 'ForeignKey', Join: 'IDBook' },
+										{ Column: 'IDAuthor', DataType: 'ForeignKey', Join: 'IDAuthor' }
+									]
+								}
+							]
+						};
+
+						let tmpOutput = tmpViz.generateRelationshipMap(tmpSchema);
+						libAssert.ok(tmpOutput.indexOf('Relationships') >= 0, 'Should have Relationships header');
+						libAssert.ok(tmpOutput.indexOf('BookAuthorJoin.IDBook') >= 0, 'Should show BookAuthorJoin.IDBook');
+						libAssert.ok(tmpOutput.indexOf('Book.IDBook') >= 0, 'Should reference Book.IDBook');
+						libAssert.ok(tmpOutput.indexOf('BookAuthorJoin.IDAuthor') >= 0, 'Should show BookAuthorJoin.IDAuthor');
+						libAssert.ok(tmpOutput.indexOf('Author.IDAuthor') >= 0, 'Should reference Author.IDAuthor');
+					}
+				);
+
+				test
+				(
+					'Should detect relationships from column TableJoin property (=> syntax)',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpViz = tmpManager.instantiateServiceProvider('SchemaVisualizer');
+
+						// Schema using TableJoin properties
+						let tmpSchema = {
+							Tables: [
+								{
+									TableName: 'Category',
+									Columns: [
+										{ Column: 'IDCategory', DataType: 'ID' },
+										{ Column: 'Name', DataType: 'String', Size: '128' }
+									]
+								},
+								{
+									TableName: 'Product',
+									Columns: [
+										{ Column: 'IDProduct', DataType: 'ID' },
+										{ Column: 'IDCategory', DataType: 'ForeignKey', TableJoin: 'Category' }
+									]
+								}
+							]
+						};
+
+						let tmpOutput = tmpViz.generateRelationshipMap(tmpSchema);
+						libAssert.ok(tmpOutput.indexOf('Relationships') >= 0, 'Should have Relationships header');
+						libAssert.ok(tmpOutput.indexOf('Product.IDCategory') >= 0, 'Should show Product.IDCategory');
+						libAssert.ok(tmpOutput.indexOf('Category') >= 0, 'Should reference Category table');
+					}
+				);
+
+				test
+				(
+					'Should handle Stricture Extended JSON hash format',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpViz = tmpManager.instantiateServiceProvider('SchemaVisualizer');
+
+						// Schema using Tables as a hash (Stricture Extended JSON output)
+						let tmpSchema = {
+							Tables:
+							{
+								'Book':
+								{
+									TableName: 'Book',
+									Columns: [
+										{ Column: 'IDBook', DataType: 'ID' },
+										{ Column: 'Title', DataType: 'String', Size: '200' }
+									]
+								},
+								'Review':
+								{
+									TableName: 'Review',
+									Columns: [
+										{ Column: 'IDReview', DataType: 'ID' },
+										{ Column: 'IDBook', DataType: 'ForeignKey', Join: 'IDBook' },
+										{ Column: 'Rating', DataType: 'Numeric' }
+									]
+								}
+							}
+						};
+
+						// All visualizer methods should work with hash-format Tables
+						let tmpRelMap = tmpViz.generateRelationshipMap(tmpSchema);
+						libAssert.ok(tmpRelMap.indexOf('Relationships') >= 0, 'Should have Relationships header');
+						libAssert.ok(tmpRelMap.indexOf('Review.IDBook') >= 0, 'Should show Review.IDBook');
+						libAssert.ok(tmpRelMap.indexOf('Book.IDBook') >= 0, 'Should reference Book.IDBook');
+
+						let tmpTableList = tmpViz.generateTableList(tmpSchema);
+						libAssert.ok(tmpTableList.indexOf('Tables (2)') >= 0, 'Should list 2 tables from hash');
+						libAssert.ok(tmpTableList.indexOf('Book') >= 0, 'Should include Book table');
+						libAssert.ok(tmpTableList.indexOf('Review') >= 0, 'Should include Review table');
+
+						let tmpDiagram = tmpViz.generateASCIIDiagram(tmpSchema);
+						libAssert.ok(tmpDiagram.indexOf('+') >= 0, 'Should have box borders from hash');
+						libAssert.ok(tmpDiagram.indexOf('Book') >= 0, 'Should show Book in diagram');
+						libAssert.ok(tmpDiagram.indexOf('Review') >= 0, 'Should show Review in diagram');
+						libAssert.ok(tmpDiagram.indexOf('[PK]') >= 0, 'Should show PK abbreviation');
 					}
 				);
 			}
@@ -1218,6 +1452,86 @@ suite
 
 				test
 				(
+					'Should build connections from Join column properties (-> syntax)',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpFlowBuilder = tmpManager.instantiateServiceProvider('FlowDataBuilder');
+
+						// Schema with Join properties and no ForeignKeys arrays
+						let tmpJoinSchema = {
+							Tables: [
+								{
+									TableName: 'Book',
+									Columns: [
+										{ Column: 'IDBook', DataType: 'ID' },
+										{ Column: 'Title', DataType: 'String', Size: '200' }
+									]
+								},
+								{
+									TableName: 'Review',
+									Columns: [
+										{ Column: 'IDReview', DataType: 'ID' },
+										{ Column: 'IDBook', DataType: 'ForeignKey', Join: 'IDBook' },
+										{ Column: 'Rating', DataType: 'Numeric' }
+									]
+								}
+							]
+						};
+
+						let tmpFlowData = tmpFlowBuilder.buildFlowData(tmpJoinSchema);
+						libAssert.strictEqual(tmpFlowData.Nodes.length, 2, 'Should have 2 nodes');
+						libAssert.strictEqual(tmpFlowData.Connections.length, 1, 'Should have 1 connection from Join inference');
+
+						let tmpConn = tmpFlowData.Connections[0];
+						libAssert.strictEqual(tmpConn.Data.SourceTable, 'Review');
+						libAssert.strictEqual(tmpConn.Data.TargetTable, 'Book');
+						libAssert.strictEqual(tmpConn.Data.SourceColumn, 'IDBook');
+						libAssert.strictEqual(tmpConn.Data.TargetColumn, 'IDBook');
+						libAssert.strictEqual(tmpConn.Data.Type, 'Join');
+					}
+				);
+
+				test
+				(
+					'Should build connections from TableJoin column properties (=> syntax)',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpFlowBuilder = tmpManager.instantiateServiceProvider('FlowDataBuilder');
+
+						let tmpTableJoinSchema = {
+							Tables: [
+								{
+									TableName: 'Category',
+									Columns: [
+										{ Column: 'IDCategory', DataType: 'ID' },
+										{ Column: 'Name', DataType: 'String', Size: '128' }
+									]
+								},
+								{
+									TableName: 'Product',
+									Columns: [
+										{ Column: 'IDProduct', DataType: 'ID' },
+										{ Column: 'IDCategory', DataType: 'ForeignKey', TableJoin: 'Category' }
+									]
+								}
+							]
+						};
+
+						let tmpFlowData = tmpFlowBuilder.buildFlowData(tmpTableJoinSchema);
+						libAssert.strictEqual(tmpFlowData.Nodes.length, 2, 'Should have 2 nodes');
+						libAssert.strictEqual(tmpFlowData.Connections.length, 1, 'Should have 1 connection from TableJoin inference');
+
+						let tmpConn = tmpFlowData.Connections[0];
+						libAssert.strictEqual(tmpConn.Data.SourceTable, 'Product');
+						libAssert.strictEqual(tmpConn.Data.TargetTable, 'Category');
+						libAssert.strictEqual(tmpConn.Data.Type, 'TableJoin');
+					}
+				);
+
+				test
+				(
 					'Should build diff flow data with colored node types',
 					function ()
 					{
@@ -1275,9 +1589,9 @@ suite
 							libAssert.ok(Array.isArray(tmpNode.Data.Columns), 'Data.Columns should be an array');
 						}
 
-						// Book has 4 columns: height = 28 + (4 * 22) + 10 = 126
+						// Book has 1 port (IDBook input): height = 28 + max(1, 2) * 22 + 16 = 88
 						let tmpBookNode = tmpFlowData.Nodes.find((pN) => pN.Hash === 'table-Book');
-						libAssert.strictEqual(tmpBookNode.Height, 126, 'Book height should be calculated from column count');
+						libAssert.strictEqual(tmpBookNode.Height, 88, 'Book height should be calculated from port count');
 					}
 				);
 

@@ -263,12 +263,9 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 			tmpStatements.push(tmpCreateStatement);
 		}
 
-		// -- DROP TABLE statements for removed tables --
-		for (let i = 0; i < tmpTablesRemoved.length; i++)
-		{
-			let tmpTableName = this._quoteIdentifier(tmpTablesRemoved[i].TableName, pDatabaseType);
-			tmpStatements.push('DROP TABLE IF EXISTS ' + tmpTableName);
-		}
+		// Tables that exist in the source (live database) but not in the target
+		// (DDL schema) are intentionally ignored — the migration should only
+		// operate on tables that are part of the schema, not drop unrelated ones.
 
 		// -- ALTER TABLE statements for modified tables --
 		for (let i = 0; i < tmpTablesModified.length; i++)

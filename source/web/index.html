@@ -1,0 +1,2395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meadow Migration Manager</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+	background: #f5f5f5;
+	color: #333;
+	height: 100vh;
+	overflow: hidden;
+}
+
+.migration-manager-layout {
+	display: flex;
+	height: 100vh;
+}
+
+.migration-manager-sidebar {
+	width: 220px;
+	min-width: 220px;
+	background: #2c3e50;
+	color: #ecf0f1;
+	padding: 20px 0;
+	overflow-y: auto;
+}
+
+.migration-manager-sidebar h3 {
+	padding: 0 20px 16px;
+	font-size: 16px;
+	font-weight: 600;
+	border-bottom: 1px solid #34495e;
+	margin-bottom: 8px;
+}
+
+.migration-manager-nav {
+	list-style: none;
+}
+
+.migration-manager-nav li a {
+	display: block;
+	padding: 10px 20px;
+	color: #bdc3c7;
+	text-decoration: none;
+	font-size: 14px;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+
+.migration-manager-nav li a:hover {
+	background: #34495e;
+	color: #fff;
+}
+
+.migration-manager-nav li a.active {
+	background: #3498db;
+	color: #fff;
+}
+
+.migration-manager-content {
+	flex: 1;
+	padding: 24px 32px;
+	overflow-y: auto;
+	background: #fff;
+}
+
+h2 {
+	font-size: 22px;
+	margin-bottom: 16px;
+	color: #2c3e50;
+	border-bottom: 2px solid #3498db;
+	padding-bottom: 8px;
+}
+
+.schema-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 24px;
+}
+
+.schema-table th, .schema-table td {
+	padding: 10px 14px;
+	text-align: left;
+	border-bottom: 1px solid #e0e0e0;
+}
+
+.schema-table th {
+	background: #f8f9fa;
+	font-weight: 600;
+	color: #555;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.schema-table tr:hover {
+	background: #f0f7ff;
+}
+
+.schema-table td a {
+	color: #3498db;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.schema-table td a:hover {
+	text-decoration: underline;
+}
+
+.badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 12px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.badge-yes { background: #d5f5e3; color: #27ae60; }
+.badge-no { background: #fde8e8; color: #c0392b; }
+
+pre.code-block {
+	background: #1e1e1e;
+	color: #d4d4d4;
+	padding: 16px;
+	border-radius: 6px;
+	font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	overflow-x: auto;
+	white-space: pre;
+	margin-bottom: 16px;
+}
+
+.btn {
+	display: inline-block;
+	padding: 8px 18px;
+	border: none;
+	border-radius: 4px;
+	font-size: 14px;
+	cursor: pointer;
+	margin-right: 8px;
+	transition: background 0.15s;
+}
+
+.btn-primary { background: #3498db; color: #fff; }
+.btn-primary:hover { background: #2980b9; }
+.btn-secondary { background: #95a5a6; color: #fff; }
+.btn-secondary:hover { background: #7f8c8d; }
+.btn-success { background: #27ae60; color: #fff; }
+.btn-success:hover { background: #229954; }
+
+.form-group {
+	margin-bottom: 16px;
+}
+
+.form-group label {
+	display: block;
+	margin-bottom: 6px;
+	font-weight: 600;
+	font-size: 14px;
+	color: #555;
+}
+
+.form-group select,
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="number"] {
+	padding: 8px 12px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 14px;
+	min-width: 200px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="number"] {
+	width: 280px;
+}
+
+.form-row {
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+.form-row .form-group {
+	flex: 1;
+	min-width: 200px;
+}
+
+.source-toggle {
+	display: inline-flex;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	overflow: hidden;
+	margin-bottom: 12px;
+}
+
+.source-toggle label {
+	padding: 6px 14px;
+	font-size: 13px;
+	cursor: pointer;
+	background: #f8f9fa;
+	color: #555;
+	border-right: 1px solid #ccc;
+	transition: background 0.15s, color 0.15s;
+}
+
+.source-toggle label:last-child {
+	border-right: none;
+}
+
+.source-toggle input[type="radio"] {
+	display: none;
+}
+
+.source-toggle input[type="radio"]:checked + label,
+.source-toggle label.active {
+	background: #3498db;
+	color: #fff;
+}
+
+.conn-status {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	margin-right: 6px;
+}
+
+.conn-status-ok { background: #27ae60; }
+.conn-status-fail { background: #c0392b; }
+.conn-status-unknown { background: #95a5a6; }
+
+.status-msg {
+	padding: 10px 14px;
+	border-radius: 4px;
+	margin-bottom: 16px;
+	font-size: 14px;
+}
+
+.status-success { background: #d5f5e3; color: #1e8449; }
+.status-error { background: #fde8e8; color: #c0392b; }
+
+.loading {
+	color: #999;
+	font-style: italic;
+}
+
+.tab-bar {
+	display: flex;
+	border-bottom: 2px solid #e0e0e0;
+	margin-bottom: 16px;
+}
+
+.tab-bar button {
+	padding: 8px 16px;
+	border: none;
+	background: none;
+	font-size: 14px;
+	cursor: pointer;
+	color: #999;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+	transition: all 0.15s;
+}
+
+.tab-bar button.active {
+	color: #3498db;
+	border-bottom-color: #3498db;
+}
+
+.tab-bar button:hover {
+	color: #2c3e50;
+}
+
+.json-viewer {
+	background: #f8f9fa;
+	border: 1px solid #e0e0e0;
+	border-radius: 6px;
+	padding: 16px;
+	font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	overflow-x: auto;
+	white-space: pre;
+	max-height: 500px;
+	overflow-y: auto;
+}
+
+/* ============================================================
+   CodeJar / MicroDDL Editor Styles
+   ============================================================ */
+
+/* ============================================================
+   DDL File Dropdown (hierarchical file selector)
+   ============================================================ */
+
+.mddl-file-dropdown {
+	position: relative;
+	margin-bottom: 0;
+	background: #2c3e50;
+	border-radius: 6px 6px 0 0;
+}
+
+.mddl-file-dropdown-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 8px 14px;
+	border: none;
+	background: #1e1e1e;
+	color: #e0e0e0;
+	font-size: 13px;
+	font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+	cursor: pointer;
+	border-radius: 6px 6px 0 0;
+	text-align: left;
+}
+
+.mddl-file-dropdown-trigger:hover {
+	background: #252526;
+}
+
+.mddl-file-dropdown-trigger .file-name {
+	font-weight: 600;
+}
+
+.mddl-file-dropdown-trigger .file-meta {
+	color: #888;
+	font-size: 11px;
+	margin-left: 12px;
+}
+
+.mddl-file-dropdown-trigger .dropdown-arrow {
+	margin-left: 8px;
+	font-size: 10px;
+	color: #888;
+	transition: transform 0.15s;
+}
+
+.mddl-file-dropdown-trigger .dropdown-arrow.open {
+	transform: rotate(180deg);
+}
+
+.mddl-file-dropdown-trigger.dirty .file-name::after {
+	content: ' \2022';
+	color: #e67e22;
+}
+
+.mddl-file-dropdown-panel {
+	display: none;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	max-height: 400px;
+	overflow-y: auto;
+	background: #2c3e50;
+	border: 1px solid #34495e;
+	border-top: none;
+	border-radius: 0 0 6px 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.mddl-file-dropdown-panel.open {
+	display: block;
+}
+
+.mddl-file-dropdown-item {
+	display: flex;
+	align-items: baseline;
+	padding: 6px 14px;
+	cursor: pointer;
+	border-bottom: 1px solid #34495e;
+	transition: background 0.1s;
+}
+
+.mddl-file-dropdown-item:last-child {
+	border-bottom: none;
+}
+
+.mddl-file-dropdown-item:hover {
+	background: #34495e;
+}
+
+.mddl-file-dropdown-item.active {
+	background: #1e1e1e;
+}
+
+.mddl-file-dropdown-item .file-chain {
+	color: #bdc3c7;
+	font-size: 13px;
+	font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1;
+	min-width: 0;
+}
+
+.mddl-file-dropdown-item .file-chain .chain-ancestor {
+	color: #7f8c8d;
+}
+
+.mddl-file-dropdown-item .file-chain .chain-separator {
+	color: #555;
+	margin: 0 3px;
+}
+
+.mddl-file-dropdown-item .file-chain .chain-leaf {
+	color: #e0e0e0;
+	font-weight: 600;
+}
+
+.mddl-file-dropdown-item.dirty .chain-leaf::after {
+	content: ' \2022';
+	color: #e67e22;
+}
+
+.mddl-file-dropdown-item .file-info {
+	color: #7f8c8d;
+	font-size: 11px;
+	margin-left: 12px;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.mddl-editor-wrap {
+	display: flex;
+	border: 1px solid #444;
+	border-radius: 0 0 6px 6px;
+	background: #1e1e1e;
+	overflow: hidden;
+	min-height: 400px;
+	max-height: calc(100vh - 340px);
+}
+
+.mddl-editor-wrap.no-tabs {
+	border-radius: 6px;
+}
+
+.mddl-line-numbers {
+	padding: 12px 0;
+	background: #252526;
+	color: #858585;
+	font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	text-align: right;
+	user-select: none;
+	min-width: 44px;
+	overflow: hidden;
+	border-right: 1px solid #333;
+}
+
+.mddl-line-numbers span {
+	display: block;
+	padding: 0 8px 0 8px;
+}
+
+.mddl-editor {
+	flex: 1;
+	padding: 12px;
+	font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	color: #d4d4d4;
+	background: #1e1e1e;
+	overflow: auto;
+	outline: none;
+	min-height: 100%;
+	tab-size: 4;
+}
+
+/* MicroDDL syntax highlighting classes */
+.mddl-table { color: #f44747; font-weight: bold; }
+.mddl-id { color: #dcdcaa; font-weight: 600; }
+.mddl-fk { color: #569cd6; }
+.mddl-string { color: #6a9955; }
+.mddl-numeric { color: #b5cea8; }
+.mddl-decimal { color: #b5cea8; }
+.mddl-text { color: #6a9955; font-style: italic; }
+.mddl-datetime { color: #4ec9b0; }
+.mddl-boolean { color: #c586c0; }
+.mddl-guid { color: #dcdcaa; }
+.mddl-desc { color: #808080; }
+.mddl-coldesc { color: #808080; font-style: italic; }
+.mddl-comment { color: #6a9955; font-style: italic; }
+.mddl-directive { color: #f44747; font-weight: 600; }
+.mddl-join { color: #569cd6; font-weight: bold; }
+.mddl-size { color: #b5cea8; }
+
+/* ============================================================
+   Flow Diagram container
+   ============================================================ */
+.flow-diagram-container {
+	width: 100%;
+	height: calc(100vh - 260px);
+	min-height: 500px;
+	border: 1px solid #d0d4d8;
+	border-radius: 6px;
+	background: #fafafa;
+	position: relative;
+	overflow: hidden;
+}
+
+.flow-diagram-container .pict-flow-container {
+	width: 100%;
+	height: 100%;
+}
+</style>
+</head>
+<body>
+
+<div class="migration-manager-layout">
+	<div class="migration-manager-sidebar">
+		<h3>Migration Manager</h3>
+		<ul class="migration-manager-nav" id="nav">
+			<li><a data-nav="SchemaLibrary" class="active">Schema Library</a></li>
+			<li><a data-nav="DDLEditor">DDL Editor</a></li>
+			<li><a data-nav="SchemaVisualizer">Schema Visualizer</a></li>
+			<li><a data-nav="MeadowConfig">Meadow Config</a></li>
+			<li><a data-nav="Connections">Connections</a></li>
+			<li><a data-nav="SchemaDiff">Schema Diff</a></li>
+			<li><a data-nav="MigrationScript">Migration Script</a></li>
+		</ul>
+	</div>
+	<div class="migration-manager-content" id="content">
+		<p class="loading">Loading...</p>
+	</div>
+</div>
+
+<script src="/lib/codejar.js"></script>
+<script src="/lib/pict.min.js"></script>
+<script src="/lib/pict-section-flow.min.js"></script>
+<!-- PICT Dynamic View CSS Container (required for pict-section-flow CSS injection) -->
+<style id="PICT-CSS"></style>
+<script>
+(function() {
+	'use strict';
+
+	var state = {
+		schemas: [],
+		connections: [],
+		providers: [],
+		activeSchema: null,
+		currentView: 'SchemaLibrary'
+	};
+
+	// Editor state for CodeJar multi-file editor
+	var editorState = {
+		jar: null,
+		currentFile: null,
+		files: [],
+		schemaName: null,
+		dirty: false,
+		dirtyFiles: {}
+	};
+
+	var content = document.getElementById('content');
+
+	// ---- Navigation ----
+	document.getElementById('nav').addEventListener('click', function(e) {
+		if (e.target.tagName === 'A' && e.target.dataset.nav) {
+			var links = document.querySelectorAll('.migration-manager-nav a');
+			for (var i = 0; i < links.length; i++) links[i].classList.remove('active');
+			e.target.classList.add('active');
+			state.currentView = e.target.dataset.nav;
+			renderView();
+		}
+	});
+
+	// ---- API helpers ----
+	function api(method, path, body) {
+		var opts = { method: method, headers: {} };
+		if (body) {
+			opts.headers['Content-Type'] = 'application/json';
+			opts.body = JSON.stringify(body);
+		}
+		return fetch(path, opts).then(function(r) { return r.json(); });
+	}
+
+	function escapeHTML(str) {
+		var div = document.createElement('div');
+		div.textContent = str;
+		return div.innerHTML;
+	}
+
+	function formatBytes(pBytes) {
+		if (pBytes < 1024) return pBytes + ' B';
+		if (pBytes < 1024 * 1024) return (pBytes / 1024).toFixed(1) + ' KB';
+		return (pBytes / (1024 * 1024)).toFixed(1) + ' MB';
+	}
+
+	function buildAncestryChain(pFiles, pFile) {
+		var tmpChain = [pFile.RelativePath.split('/').pop()];
+		var tmpCurrent = pFile;
+
+		while (tmpCurrent.IncludedBy) {
+			var tmpParent = null;
+			for (var i = 0; i < pFiles.length; i++) {
+				if (pFiles[i].RelativePath === tmpCurrent.IncludedBy) {
+					tmpParent = pFiles[i];
+					break;
+				}
+			}
+			if (!tmpParent) break;
+			tmpChain.unshift(tmpParent.RelativePath.split('/').pop());
+			tmpCurrent = tmpParent;
+		}
+
+		return tmpChain;
+	}
+
+	function formatFileMeta(pFile) {
+		return formatBytes(pFile.Bytes) + ' \u00B7 '
+			+ pFile.LineCount + ' lines \u00B7 '
+			+ pFile.TableCount + ' table' + (pFile.TableCount !== 1 ? 's' : '');
+	}
+
+	// ---- Load schemas list ----
+	function loadSchemas(cb) {
+		api('GET', '/api/schemas').then(function(data) {
+			if (data.Success) state.schemas = data.Schemas;
+			if (cb) cb();
+		}).catch(function() { if (cb) cb(); });
+	}
+
+	// ---- Connection localStorage persistence ----
+	var CONN_STORAGE_KEY = 'meadow-migration-connections';
+
+	function _persistConnectionsToStorage() {
+		try {
+			localStorage.setItem(CONN_STORAGE_KEY, JSON.stringify(state.connections));
+		} catch (e) { /* quota or private browsing */ }
+	}
+
+	function _loadConnectionsFromStorage() {
+		try {
+			return JSON.parse(localStorage.getItem(CONN_STORAGE_KEY)) || [];
+		} catch (e) { return []; }
+	}
+
+	function _syncConnectionToServer(conn) {
+		// Fire-and-forget POST so the server knows about this connection for test/introspect
+		api('POST', '/api/connections', { Name: conn.Name, Type: conn.Type, Config: conn.Config }).catch(function() {});
+	}
+
+	// ---- Load connections list ----
+	function loadConnections(cb) {
+		// localStorage is the primary store (preserves passwords)
+		var tmpStored = _loadConnectionsFromStorage();
+		if (tmpStored.length > 0) {
+			state.connections = tmpStored;
+			// Sync all stored connections to server so test/introspect work
+			for (var i = 0; i < tmpStored.length; i++) {
+				_syncConnectionToServer(tmpStored[i]);
+			}
+		}
+		// Also fetch from server to pick up any connections added via CLI/config file
+		api('GET', '/api/connections').then(function(data) {
+			if (data.Success && data.Connections) {
+				// Merge server-only connections into our list
+				var tmpLocalNames = {};
+				for (var i = 0; i < state.connections.length; i++) {
+					tmpLocalNames[state.connections[i].Name] = true;
+				}
+				var tmpAdded = false;
+				for (var j = 0; j < data.Connections.length; j++) {
+					if (!tmpLocalNames[data.Connections[j].Name]) {
+						state.connections.push(data.Connections[j]);
+						tmpAdded = true;
+					}
+				}
+				if (tmpAdded) _persistConnectionsToStorage();
+			}
+			if (cb) cb();
+		}).catch(function() { if (cb) cb(); });
+	}
+
+	// ---- Load available providers ----
+	function loadProviders(cb) {
+		api('GET', '/api/providers').then(function(data) {
+			if (data.Success) state.providers = data.Providers;
+			if (cb) cb();
+		}).catch(function() { if (cb) cb(); });
+	}
+
+	// ============================================================
+	// MicroDDL Syntax Highlighter
+	// ============================================================
+	function highlightMicroDDL(pEditorElement) {
+		var tmpCode = pEditorElement.textContent || '';
+		var tmpLines = tmpCode.split('\n');
+		var tmpHTML = '';
+
+		for (var i = 0; i < tmpLines.length; i++)
+		{
+			var tmpLine = tmpLines[i];
+			var tmpTrimmed = tmpLine.trimStart();
+
+			if (i > 0) tmpHTML += '\n';
+
+			// Blank line
+			if (tmpTrimmed.length === 0)
+			{
+				tmpHTML += escapeHTML(tmpLine);
+				continue;
+			}
+
+			var tmpLeading = tmpLine.substring(0, tmpLine.length - tmpTrimmed.length);
+			var tmpLeadingHTML = escapeHTML(tmpLeading);
+			var tmpFirst = tmpTrimmed.charAt(0);
+
+			// Comment lines
+			if (tmpTrimmed.indexOf('//') === 0)
+			{
+				tmpHTML += tmpLeadingHTML + '<span class="mddl-comment">' + escapeHTML(tmpLine.substring(tmpLeading.length)) + '</span>';
+				continue;
+			}
+
+			// [Include ...] directive
+			if (tmpTrimmed.indexOf('[Include') === 0 || tmpTrimmed.indexOf('[include') === 0)
+			{
+				tmpHTML += tmpLeadingHTML + '<span class="mddl-directive">' + escapeHTML(tmpLine.substring(tmpLeading.length)) + '</span>';
+				continue;
+			}
+
+			// DDL lines by leading symbol
+			var tmpClass = '';
+			switch (tmpFirst)
+			{
+				case '!': tmpClass = 'mddl-table'; break;
+				case '@': tmpClass = 'mddl-id'; break;
+				case '~': tmpClass = 'mddl-fk'; break;
+				case '$': tmpClass = 'mddl-string'; break;
+				case '#': tmpClass = 'mddl-numeric'; break;
+				case '.': tmpClass = 'mddl-decimal'; break;
+				case '*': tmpClass = 'mddl-text'; break;
+				case '&': tmpClass = 'mddl-datetime'; break;
+				case '^': tmpClass = 'mddl-boolean'; break;
+				case '%': tmpClass = 'mddl-guid'; break;
+				case '>': tmpClass = 'mddl-desc'; break;
+				case '"': tmpClass = 'mddl-coldesc'; break;
+			}
+
+			if (tmpClass)
+			{
+				var tmpRest = tmpLine.substring(tmpLeading.length);
+				// Check for join reference (-> or =>)
+				var tmpJoinIdx = tmpRest.indexOf(' -> ');
+				if (tmpJoinIdx < 0) tmpJoinIdx = tmpRest.indexOf(' => ');
+
+				if (tmpJoinIdx >= 0)
+				{
+					var tmpBefore = tmpRest.substring(0, tmpJoinIdx);
+					var tmpAfter = tmpRest.substring(tmpJoinIdx);
+					// Check for size after column name but before join
+					var tmpParts = tmpBefore.split(' ');
+					if (tmpParts.length > 1)
+					{
+						// Symbol+Name then size
+						tmpHTML += tmpLeadingHTML + '<span class="' + tmpClass + '">' + escapeHTML(tmpParts[0]) + '</span>';
+						tmpHTML += ' <span class="mddl-size">' + escapeHTML(tmpParts.slice(1).join(' ')) + '</span>';
+					}
+					else
+					{
+						tmpHTML += tmpLeadingHTML + '<span class="' + tmpClass + '">' + escapeHTML(tmpBefore) + '</span>';
+					}
+					tmpHTML += '<span class="mddl-join">' + escapeHTML(tmpAfter) + '</span>';
+				}
+				else
+				{
+					// Check for size parameter (e.g. "$Title 200")
+					var tmpParts = tmpRest.split(' ');
+					if (tmpParts.length > 1 && tmpFirst !== '>' && tmpFirst !== '"')
+					{
+						tmpHTML += tmpLeadingHTML + '<span class="' + tmpClass + '">' + escapeHTML(tmpParts[0]) + '</span>';
+						tmpHTML += ' <span class="mddl-size">' + escapeHTML(tmpParts.slice(1).join(' ')) + '</span>';
+					}
+					else
+					{
+						tmpHTML += tmpLeadingHTML + '<span class="' + tmpClass + '">' + escapeHTML(tmpRest) + '</span>';
+					}
+				}
+			}
+			else
+			{
+				// Unknown line — just escape it
+				tmpHTML += escapeHTML(tmpLine);
+			}
+		}
+
+		pEditorElement.innerHTML = tmpHTML;
+	}
+
+	// ============================================================
+	// Line Numbers
+	// ============================================================
+	function updateLineNumbers(pLineNumbersElement, pEditorElement) {
+		var tmpCode = pEditorElement.textContent || '';
+		var tmpLineCount = tmpCode.split('\n').length;
+		var tmpHTML = '';
+		for (var i = 1; i <= tmpLineCount; i++)
+		{
+			tmpHTML += '<span>' + i + '</span>';
+		}
+		pLineNumbersElement.innerHTML = tmpHTML;
+	}
+
+	// ============================================================
+	// View renderers
+	// ============================================================
+	function renderView() {
+		// Destroy existing CodeJar instance when switching views
+		if (editorState.jar)
+		{
+			editorState.jar.destroy();
+			editorState.jar = null;
+		}
+
+		// Destroy flow diagram when switching away from visualizer
+		if (state.currentView !== 'SchemaVisualizer')
+		{
+			destroyFlowDiagram();
+		}
+
+		switch (state.currentView) {
+			case 'SchemaLibrary': renderSchemaLibrary(); break;
+			case 'DDLEditor': renderDDLEditor(); break;
+			case 'SchemaVisualizer': renderSchemaVisualizer(); break;
+			case 'MeadowConfig': renderMeadowConfig(); break;
+			case 'Connections': renderConnections(); break;
+			case 'SchemaDiff': renderSchemaDiff(); break;
+			case 'MigrationScript': renderMigrationScript(); break;
+			default: renderSchemaLibrary();
+		}
+	}
+
+	function renderSchemaLibrary() {
+		loadSchemas(function() {
+			var html = '<h2>Schema Library</h2>';
+			if (state.schemas.length === 0) {
+				html += '<p>No schemas loaded. Place .mddl files in the model directory.</p>';
+			} else {
+				html += '<table class="schema-table"><thead><tr>';
+				html += '<th>Name</th><th>Compiled</th><th>Tables</th><th>Last Compiled</th><th>Actions</th>';
+				html += '</tr></thead><tbody>';
+				for (var i = 0; i < state.schemas.length; i++) {
+					var s = state.schemas[i];
+					html += '<tr>';
+					html += '<td><a onclick="window._selectSchema(\'' + escapeHTML(s.Name) + '\')">' + escapeHTML(s.Name) + '</a></td>';
+					html += '<td><span class="badge ' + (s.IsCompiled ? 'badge-yes' : 'badge-no') + '">' + (s.IsCompiled ? 'Yes' : 'No') + '</span></td>';
+					html += '<td>' + s.TableCount + '</td>';
+					html += '<td>' + (s.LastCompiled ? new Date(s.LastCompiled).toLocaleString() : 'Never') + '</td>';
+					html += '<td>';
+					html += '<button class="btn btn-primary" onclick="window._compileSchema(\'' + escapeHTML(s.Name) + '\')">Compile</button>';
+					html += '<button class="btn btn-secondary" onclick="window._editSchema(\'' + escapeHTML(s.Name) + '\')">Edit DDL</button>';
+					html += '<button class="btn btn-secondary" onclick="window._visualizeSchema(\'' + escapeHTML(s.Name) + '\')">Visualize</button>';
+					html += '</td></tr>';
+				}
+				html += '</tbody></table>';
+			}
+			content.innerHTML = html;
+		});
+	}
+
+	window._selectSchema = function(name) {
+		state.activeSchema = name;
+		api('GET', '/api/schemas/' + encodeURIComponent(name)).then(function(data) {
+			if (!data.Success) return;
+			var s = data.Schema;
+			var html = '<h2>Schema: ' + escapeHTML(s.Name) + '</h2>';
+			html += '<p><span class="badge ' + (s.IsCompiled ? 'badge-yes' : 'badge-no') + '">' + (s.IsCompiled ? 'Compiled' : 'Not Compiled') + '</span>';
+			if (s.LastCompiled) html += ' &mdash; Last compiled: ' + new Date(s.LastCompiled).toLocaleString();
+			html += '</p>';
+			html += '<h3 style="margin-top:16px">DDL</h3>';
+			html += '<pre class="code-block">' + escapeHTML(s.DDL || '(empty)') + '</pre>';
+			if (s.CompiledSchema) {
+				html += '<h3>Compiled Schema</h3>';
+				html += '<div class="json-viewer">' + escapeHTML(JSON.stringify(s.CompiledSchema, null, 2)) + '</div>';
+			}
+			html += '<div style="margin-top:16px">';
+			html += '<button class="btn btn-primary" onclick="window._compileSchema(\'' + escapeHTML(s.Name) + '\')">Compile</button>';
+			html += '<button class="btn btn-secondary" onclick="window._editSchema(\'' + escapeHTML(s.Name) + '\')">Edit DDL</button>';
+			html += '<button class="btn btn-secondary" onclick="window._visualizeSchema(\'' + escapeHTML(s.Name) + '\')">Visualize</button>';
+			html += '<button class="btn btn-secondary" onclick="renderSchemaLibrary()">Back to List</button>';
+			html += '</div>';
+			content.innerHTML = html;
+		});
+	};
+
+	window._compileSchema = function(name) {
+		api('POST', '/api/schemas/' + encodeURIComponent(name) + '/compile').then(function(data) {
+			if (data.Success) {
+				renderView();
+			} else {
+				alert('Compilation failed: ' + (data.Error || 'Unknown error'));
+			}
+		});
+	};
+
+	window._editSchema = function(name) {
+		state.activeSchema = name;
+		state.currentView = 'DDLEditor';
+		var links = document.querySelectorAll('.migration-manager-nav a');
+		for (var i = 0; i < links.length; i++) {
+			links[i].classList.toggle('active', links[i].dataset.nav === 'DDLEditor');
+		}
+		renderDDLEditor();
+	};
+
+	window._visualizeSchema = function(name) {
+		state.activeSchema = name;
+		state.currentView = 'SchemaVisualizer';
+		var links = document.querySelectorAll('.migration-manager-nav a');
+		for (var i = 0; i < links.length; i++) {
+			links[i].classList.toggle('active', links[i].dataset.nav === 'SchemaVisualizer');
+		}
+		renderSchemaVisualizer();
+	};
+
+	function renderSchemaSelector(selectedName, id) {
+		var html = '<select id="' + id + '">';
+		for (var i = 0; i < state.schemas.length; i++) {
+			var selected = (state.schemas[i].Name === selectedName) ? ' selected' : '';
+			html += '<option value="' + escapeHTML(state.schemas[i].Name) + '"' + selected + '>' + escapeHTML(state.schemas[i].Name) + '</option>';
+		}
+		html += '</select>';
+		return html;
+	}
+
+	// ============================================================
+	// DDL Editor — CodeJar with MicroDDL Highlighting
+	// ============================================================
+	function renderDDLEditor() {
+		// Destroy any previous CodeJar instance
+		if (editorState.jar)
+		{
+			editorState.jar.destroy();
+			editorState.jar = null;
+		}
+
+		loadSchemas(function() {
+			var html = '<h2>DDL Editor</h2>';
+			html += '<div class="form-group"><label>Schema</label>';
+			html += renderSchemaSelector(state.activeSchema || (state.schemas[0] && state.schemas[0].Name), 'ddl-schema-select');
+			html += '</div>';
+			html += '<div id="ddl-editor-area"><p class="loading">Loading DDL...</p></div>';
+			content.innerHTML = html;
+
+			var sel = document.getElementById('ddl-schema-select');
+			loadFilesForEditor(sel.value);
+			sel.addEventListener('change', function() {
+				// Destroy previous editor
+				if (editorState.jar)
+				{
+					editorState.jar.destroy();
+					editorState.jar = null;
+				}
+				loadFilesForEditor(sel.value);
+			});
+		});
+	}
+
+	function loadFilesForEditor(name) {
+		state.activeSchema = name;
+		editorState.schemaName = name;
+		editorState.dirty = false;
+		editorState.dirtyFiles = {};
+
+		api('GET', '/api/schemas/' + encodeURIComponent(name) + '/files').then(function(data) {
+			if (!data.Success) return;
+
+			editorState.files = data.Files;
+
+			var area = document.getElementById('ddl-editor-area');
+			var html = '';
+
+			// File dropdown (only if more than one file)
+			if (data.Files.length > 1)
+			{
+				var tmpInitFile = data.Files[0];
+				var tmpInitBasename = tmpInitFile.RelativePath.split('/').pop();
+				var tmpInitMeta = formatFileMeta(tmpInitFile);
+
+				html += '<div class="mddl-file-dropdown" id="ddl-file-dropdown">';
+
+				// Trigger button
+				html += '<button class="mddl-file-dropdown-trigger" id="ddl-dropdown-trigger">';
+				html += '<span><span class="file-name" id="ddl-dropdown-filename">' + escapeHTML(tmpInitBasename) + '</span>';
+				html += '<span class="file-meta" id="ddl-dropdown-filemeta">' + escapeHTML(tmpInitMeta) + '</span></span>';
+				html += '<span class="dropdown-arrow" id="ddl-dropdown-arrow">\u25BC</span>';
+				html += '</button>';
+
+				// Dropdown panel
+				html += '<div class="mddl-file-dropdown-panel" id="ddl-dropdown-panel">';
+				for (var i = 0; i < data.Files.length; i++)
+				{
+					var tmpFile = data.Files[i];
+					var tmpChain = buildAncestryChain(data.Files, tmpFile);
+					var tmpActiveClass = (i === 0) ? ' active' : '';
+
+					// Build the chain display
+					var tmpChainHTML = '';
+					for (var c = 0; c < tmpChain.length; c++)
+					{
+						if (c > 0) tmpChainHTML += '<span class="chain-separator">\u2192</span>';
+						if (c === tmpChain.length - 1)
+						{
+							tmpChainHTML += '<span class="chain-leaf">' + escapeHTML(tmpChain[c]) + '</span>';
+						}
+						else
+						{
+							tmpChainHTML += '<span class="chain-ancestor">' + escapeHTML(tmpChain[c]) + '</span>';
+						}
+					}
+
+					var tmpMeta = formatFileMeta(tmpFile);
+
+					html += '<div class="mddl-file-dropdown-item' + tmpActiveClass + '" data-file-idx="' + i + '">';
+					html += '<span class="file-chain">' + tmpChainHTML + '</span>';
+					html += '<span class="file-info">' + escapeHTML(tmpMeta) + '</span>';
+					html += '</div>';
+				}
+				html += '</div>'; // panel
+				html += '</div>'; // dropdown wrapper
+			}
+
+			// Editor container
+			var tmpNoTabsClass = (data.Files.length <= 1) ? ' no-tabs' : '';
+			html += '<div class="mddl-editor-wrap' + tmpNoTabsClass + '">';
+			html += '<div class="mddl-line-numbers" id="ddl-line-numbers"></div>';
+			html += '<div class="mddl-editor" id="ddl-code-editor"></div>';
+			html += '</div>';
+
+			// Buttons
+			html += '<div style="margin-top:12px">';
+			html += '<button class="btn btn-primary" id="ddl-save-btn">Save</button>';
+			html += '<button class="btn btn-success" id="ddl-compile-btn">Save &amp; Compile</button>';
+			html += '</div>';
+			html += '<div id="ddl-status"></div>';
+
+			area.innerHTML = html;
+
+			// Initialize CodeJar
+			var tmpEditorEl = document.getElementById('ddl-code-editor');
+			var tmpLineNumEl = document.getElementById('ddl-line-numbers');
+
+			// Set initial content
+			var tmpInitialFile = data.Files[0];
+			editorState.currentFile = tmpInitialFile.RelativePath;
+			tmpEditorEl.textContent = tmpInitialFile.Content;
+
+			// Create CodeJar instance
+			editorState.jar = CodeJar(tmpEditorEl, highlightMicroDDL, {
+				tab: '\t',
+				indentOn: /^\s*$/,
+				addClosing: false,
+				catchTab: true,
+				preserveIdent: true,
+				history: true
+			});
+
+			// Apply style overrides (same fix as pict-section-code)
+			tmpEditorEl.style.whiteSpace = 'pre';
+			tmpEditorEl.style.overflowWrap = 'normal';
+
+			// Update line numbers on every change
+			editorState.jar.onUpdate(function(code) {
+				updateLineNumbers(tmpLineNumEl, tmpEditorEl);
+				editorState.dirty = true;
+				editorState.dirtyFiles[editorState.currentFile] = true;
+				updateTabDirtyState();
+
+				// Live metadata recomputation
+				var tmpUpdatedIdx = findFileIndex(editorState.currentFile);
+				if (tmpUpdatedIdx >= 0)
+				{
+					var tmpFileEntry = editorState.files[tmpUpdatedIdx];
+					tmpFileEntry.Bytes = new Blob([code]).size;
+					tmpFileEntry.LineCount = code.split('\n').length;
+					tmpFileEntry.TableCount = (code.match(/^!/gm) || []).length;
+
+					var tmpMetaEl = document.getElementById('ddl-dropdown-filemeta');
+					if (tmpMetaEl)
+					{
+						tmpMetaEl.textContent = formatFileMeta(tmpFileEntry);
+					}
+				}
+			});
+
+			// Initial line numbers
+			updateLineNumbers(tmpLineNumEl, tmpEditorEl);
+
+			// Sync scroll between editor and line numbers
+			tmpEditorEl.addEventListener('scroll', function() {
+				tmpLineNumEl.scrollTop = tmpEditorEl.scrollTop;
+			});
+
+			// File dropdown switching
+			var tmpDropdown = document.getElementById('ddl-file-dropdown');
+			if (tmpDropdown)
+			{
+				var tmpTrigger = document.getElementById('ddl-dropdown-trigger');
+				var tmpPanel = document.getElementById('ddl-dropdown-panel');
+				var tmpArrow = document.getElementById('ddl-dropdown-arrow');
+
+				// Toggle dropdown on trigger click
+				tmpTrigger.addEventListener('click', function(e) {
+					e.stopPropagation();
+					var tmpIsOpen = tmpPanel.classList.contains('open');
+					if (tmpIsOpen)
+					{
+						tmpPanel.classList.remove('open');
+						tmpArrow.classList.remove('open');
+					}
+					else
+					{
+						tmpPanel.classList.add('open');
+						tmpArrow.classList.add('open');
+					}
+				});
+
+				// Close dropdown when clicking outside
+				document.addEventListener('click', function(e) {
+					if (!tmpDropdown.contains(e.target))
+					{
+						tmpPanel.classList.remove('open');
+						tmpArrow.classList.remove('open');
+					}
+				});
+
+				// Item selection
+				tmpPanel.addEventListener('click', function(e) {
+					var tmpItem = e.target.closest('.mddl-file-dropdown-item');
+					if (!tmpItem || tmpItem.dataset.fileIdx === undefined) return;
+
+					var tmpIdx = parseInt(tmpItem.dataset.fileIdx, 10);
+					if (tmpIdx < 0 || tmpIdx >= editorState.files.length) return;
+
+					// Store current content back to files array before switching
+					var tmpCurrentIdx = findFileIndex(editorState.currentFile);
+					if (tmpCurrentIdx >= 0)
+					{
+						editorState.files[tmpCurrentIdx].Content = editorState.jar.toString();
+					}
+
+					// Switch to new file
+					var tmpNewFile = editorState.files[tmpIdx];
+					editorState.currentFile = tmpNewFile.RelativePath;
+
+					// Update CodeJar content
+					editorState.jar.updateCode(tmpNewFile.Content, false);
+
+					// Apply style overrides again (CodeJar may reset them)
+					tmpEditorEl.style.whiteSpace = 'pre';
+					tmpEditorEl.style.overflowWrap = 'normal';
+
+					// Update line numbers
+					updateLineNumbers(tmpLineNumEl, tmpEditorEl);
+
+					// Update active item styling
+					var tmpItems = tmpPanel.querySelectorAll('.mddl-file-dropdown-item');
+					for (var i = 0; i < tmpItems.length; i++) tmpItems[i].classList.remove('active');
+					tmpItem.classList.add('active');
+
+					// Update trigger display
+					var tmpBasename = tmpNewFile.RelativePath.split('/').pop();
+					document.getElementById('ddl-dropdown-filename').textContent = tmpBasename;
+					document.getElementById('ddl-dropdown-filemeta').textContent = formatFileMeta(tmpNewFile);
+
+					// Close the dropdown
+					tmpPanel.classList.remove('open');
+					tmpArrow.classList.remove('open');
+				});
+			}
+
+			// Save button
+			document.getElementById('ddl-save-btn').addEventListener('click', function() {
+				saveCurrentFile(function(success) {
+					var statusEl = document.getElementById('ddl-status');
+					if (success) {
+						statusEl.innerHTML = '<div class="status-msg status-success">File saved.</div>';
+					} else {
+						statusEl.innerHTML = '<div class="status-msg status-error">Save failed.</div>';
+					}
+				});
+			});
+
+			// Save & Compile button
+			document.getElementById('ddl-compile-btn').addEventListener('click', function() {
+				saveAllDirtyFiles(function(success) {
+					if (!success) {
+						var statusEl = document.getElementById('ddl-status');
+						statusEl.innerHTML = '<div class="status-msg status-error">Save failed.</div>';
+						return;
+					}
+					api('POST', '/api/schemas/' + encodeURIComponent(editorState.schemaName) + '/compile').then(function(r) {
+						var statusEl = document.getElementById('ddl-status');
+						if (r.Success) {
+							statusEl.innerHTML = '<div class="status-msg status-success">All files saved and compiled successfully.</div>';
+						} else {
+							statusEl.innerHTML = '<div class="status-msg status-error">Compilation error: ' + escapeHTML(r.Error) + '</div>';
+						}
+					});
+				});
+			});
+		});
+	}
+
+	function findFileIndex(relPath) {
+		for (var i = 0; i < editorState.files.length; i++) {
+			if (editorState.files[i].RelativePath === relPath) return i;
+		}
+		return -1;
+	}
+
+	function updateTabDirtyState() {
+		// Update dropdown items dirty state
+		var tmpPanel = document.getElementById('ddl-dropdown-panel');
+		if (tmpPanel)
+		{
+			var tmpItems = tmpPanel.querySelectorAll('.mddl-file-dropdown-item');
+			for (var i = 0; i < tmpItems.length; i++)
+			{
+				var tmpIdx = parseInt(tmpItems[i].dataset.fileIdx, 10);
+				if (tmpIdx >= 0 && tmpIdx < editorState.files.length)
+				{
+					var tmpRelPath = editorState.files[tmpIdx].RelativePath;
+					if (editorState.dirtyFiles[tmpRelPath])
+					{
+						tmpItems[i].classList.add('dirty');
+					}
+					else
+					{
+						tmpItems[i].classList.remove('dirty');
+					}
+				}
+			}
+		}
+
+		// Update trigger button dirty state
+		var tmpTrigger = document.getElementById('ddl-dropdown-trigger');
+		if (tmpTrigger)
+		{
+			if (editorState.dirtyFiles[editorState.currentFile])
+			{
+				tmpTrigger.classList.add('dirty');
+			}
+			else
+			{
+				tmpTrigger.classList.remove('dirty');
+			}
+		}
+	}
+
+	function saveCurrentFile(cb) {
+		// Update current file content from editor
+		var tmpCurrentIdx = findFileIndex(editorState.currentFile);
+		if (tmpCurrentIdx >= 0) {
+			editorState.files[tmpCurrentIdx].Content = editorState.jar.toString();
+		}
+
+		var tmpRelPath = editorState.currentFile;
+		var tmpContent = editorState.jar.toString();
+
+		api('PUT', '/api/schemas/' + encodeURIComponent(editorState.schemaName) + '/file/' + encodeURIComponent(tmpRelPath),
+			{ Content: tmpContent }
+		).then(function(r) {
+			if (r.Success) {
+				editorState.dirtyFiles[tmpRelPath] = false;
+				updateTabDirtyState();
+			}
+			if (cb) cb(r.Success);
+		}).catch(function() { if (cb) cb(false); });
+	}
+
+	function saveAllDirtyFiles(cb) {
+		// Update current file in memory before saving
+		var tmpCurrentIdx = findFileIndex(editorState.currentFile);
+		if (tmpCurrentIdx >= 0) {
+			editorState.files[tmpCurrentIdx].Content = editorState.jar.toString();
+		}
+
+		// Collect files that need saving
+		var tmpToSave = [];
+		for (var i = 0; i < editorState.files.length; i++) {
+			var tmpRelPath = editorState.files[i].RelativePath;
+			if (editorState.dirtyFiles[tmpRelPath]) {
+				tmpToSave.push(editorState.files[i]);
+			}
+		}
+
+		// If the current file is dirty (always save it even if not in dirtyFiles)
+		if (tmpToSave.length === 0 && tmpCurrentIdx >= 0) {
+			tmpToSave.push(editorState.files[tmpCurrentIdx]);
+		}
+
+		if (tmpToSave.length === 0) {
+			if (cb) cb(true);
+			return;
+		}
+
+		var tmpDone = 0;
+		var tmpSuccess = true;
+
+		for (var i = 0; i < tmpToSave.length; i++) {
+			(function(file) {
+				api('PUT', '/api/schemas/' + encodeURIComponent(editorState.schemaName) + '/file/' + encodeURIComponent(file.RelativePath),
+					{ Content: file.Content }
+				).then(function(r) {
+					if (r.Success) {
+						editorState.dirtyFiles[file.RelativePath] = false;
+					} else {
+						tmpSuccess = false;
+					}
+					tmpDone++;
+					if (tmpDone >= tmpToSave.length) {
+						updateTabDirtyState();
+						if (cb) cb(tmpSuccess);
+					}
+				}).catch(function() {
+					tmpSuccess = false;
+					tmpDone++;
+					if (tmpDone >= tmpToSave.length) {
+						if (cb) cb(tmpSuccess);
+					}
+				});
+			})(tmpToSave[i]);
+		}
+	}
+
+	// ============================================================
+	// Schema Visualizer
+	// ============================================================
+	function renderSchemaVisualizer() {
+		loadSchemas(function() {
+			var html = '<h2>Schema Visualizer</h2>';
+			html += '<div class="form-group"><label>Schema</label>';
+			html += renderSchemaSelector(state.activeSchema || (state.schemas[0] && state.schemas[0].Name), 'viz-schema-select');
+			html += '</div>';
+			html += '<div id="viz-area"><p class="loading">Loading...</p></div>';
+			content.innerHTML = html;
+
+			var sel = document.getElementById('viz-schema-select');
+			loadVisualization(sel.value);
+			sel.addEventListener('change', function() { loadVisualization(sel.value); });
+		});
+	}
+
+	// Flow diagram state
+	var flowState = {
+		pict: null,
+		flowView: null,
+		currentFlowData: null,
+		initialized: false,
+		hideAutoConnections: true,
+		hideCustomerJoins: true
+	};
+
+	/**
+	 * Column names that Stricture/Meadow auto-generate on every table for
+	 * change-tracking.  These all reference a User table and create dense,
+	 * noisy connections in relationship diagrams.
+	 */
+	var AUTO_CONNECTION_COLUMNS = {
+		'CreatingIDUser': true,
+		'UpdatingIDUser': true,
+		'DeletingIDUser': true
+	};
+
+	/**
+	 * The IDCustomer column is auto-generated by Meadow on every table to
+	 * associate records with a customer/tenant.  These joins to the Customer
+	 * table are common and noisy in large schemas.
+	 */
+	var CUSTOMER_JOIN_COLUMNS = {
+		'IDCustomer': true
+	};
+
+	/**
+	 * Return a filtered copy of pFlowData with the given columns hidden.
+	 * Strips connections whose SourceColumn is in pColumnsToHide,
+	 * and removes the corresponding output ports from source nodes and
+	 * input ports from target nodes that are no longer referenced.
+	 */
+	function filterFlowConnections(pFlowData, pColumnsToHide)
+	{
+		if (!pFlowData) return pFlowData;
+
+		// Identify connections to remove
+		var tmpKeptConnections = [];
+		var tmpRemovedPortHashes = {};
+
+		for (var i = 0; i < pFlowData.Connections.length; i++)
+		{
+			var tmpConn = pFlowData.Connections[i];
+			var tmpSourceCol = (tmpConn.Data && tmpConn.Data.SourceColumn) ? tmpConn.Data.SourceColumn : '';
+
+			if (pColumnsToHide[tmpSourceCol])
+			{
+				// Mark both source and target port hashes for removal
+				tmpRemovedPortHashes[tmpConn.SourcePortHash] = true;
+				tmpRemovedPortHashes[tmpConn.TargetPortHash] = true;
+			}
+			else
+			{
+				tmpKeptConnections.push(tmpConn);
+			}
+		}
+
+		// Check which target ports are still used by remaining connections
+		var tmpUsedTargetPorts = {};
+		for (var i = 0; i < tmpKeptConnections.length; i++)
+		{
+			tmpUsedTargetPorts[tmpKeptConnections[i].TargetPortHash] = true;
+		}
+
+		// Only remove target ports that were marked AND are not used by any kept connection
+		var tmpFinalRemovedPorts = {};
+		for (var tmpHash in tmpRemovedPortHashes)
+		{
+			if (tmpRemovedPortHashes.hasOwnProperty(tmpHash))
+			{
+				// Always remove source (output) ports of auto-connections
+				if (tmpHash.indexOf('-out') > -1)
+				{
+					tmpFinalRemovedPorts[tmpHash] = true;
+				}
+				// Only remove target (input) ports if no kept connection references them
+				else if (!tmpUsedTargetPorts[tmpHash])
+				{
+					tmpFinalRemovedPorts[tmpHash] = true;
+				}
+			}
+		}
+
+		// Build filtered nodes with pruned ports
+		var tmpFilteredNodes = [];
+		for (var i = 0; i < pFlowData.Nodes.length; i++)
+		{
+			var tmpNode = pFlowData.Nodes[i];
+			var tmpFilteredPorts = [];
+
+			for (var j = 0; j < tmpNode.Ports.length; j++)
+			{
+				if (!tmpFinalRemovedPorts[tmpNode.Ports[j].Hash])
+				{
+					tmpFilteredPorts.push(tmpNode.Ports[j]);
+				}
+			}
+
+			// Shallow-copy the node with the filtered ports
+			var tmpCopy = {};
+			for (var tmpKey in tmpNode)
+			{
+				if (tmpNode.hasOwnProperty(tmpKey))
+				{
+					tmpCopy[tmpKey] = tmpNode[tmpKey];
+				}
+			}
+			tmpCopy.Ports = tmpFilteredPorts;
+			tmpFilteredNodes.push(tmpCopy);
+		}
+
+		return {
+			Nodes: tmpFilteredNodes,
+			Connections: tmpKeptConnections,
+			ViewState: pFlowData.ViewState
+		};
+	}
+
+	/**
+	 * Build the HTML body content for a table node in the flow diagram.
+	 * Shows a compact summary; full column details are in the properties panel.
+	 */
+	function renderTableNodeBody(pDiv, pNodeData, pNodeTypeConfig, pBounds)
+	{
+		var tmpData = pNodeData.Data || {};
+		var tmpColCount = tmpData.ColumnCount || (tmpData.Columns ? tmpData.Columns.length : 0);
+		var tmpFKCount = tmpData.FKCount || 0;
+
+		var tmpParts = [tmpColCount + ' column' + (tmpColCount !== 1 ? 's' : '')];
+		if (tmpFKCount > 0)
+		{
+			tmpParts.push(tmpFKCount + ' FK' + (tmpFKCount !== 1 ? 's' : ''));
+		}
+
+		var tmpHTML = '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;padding:6px 8px;text-align:center;">';
+		tmpHTML += '<span style="color:#7f8c8d;font-size:11px;">' + tmpParts.join(' \u00b7 ') + '</span>';
+		tmpHTML += '</div>';
+		pDiv.innerHTML = tmpHTML;
+	}
+
+	/**
+	 * Generate an HTML string showing the full column listing for a table.
+	 * Used as the pre-rendered content for the properties panel (double-click).
+	 */
+	function generateColumnDetailHTML(pColumns)
+	{
+		if (!pColumns || pColumns.length === 0) return '<div style="padding:8px;color:#999;">No columns</div>';
+
+		var tmpHTML = '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;font-size:12px;line-height:1.2;">';
+
+		for (var i = 0; i < pColumns.length; i++)
+		{
+			var tmpCol = pColumns[i];
+			var tmpBg = (i % 2 === 0) ? 'rgba(0,0,0,0.03)' : 'transparent';
+			var tmpNameColor = '#2c3e50';
+			var tmpTypeColor = '#7f8c8d';
+			var tmpBadge = '';
+
+			if (tmpCol.DataType === 'ID')
+			{
+				tmpNameColor = '#c0392b';
+				tmpBadge = '<span style="background:#c0392b;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:6px;">PK</span>';
+			}
+			else if (tmpCol.IsFK)
+			{
+				tmpNameColor = '#2980b9';
+				tmpBadge = '<span style="background:#2980b9;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-left:6px;">FK</span>';
+			}
+
+			tmpHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:' + tmpBg + ';">';
+			tmpHTML += '<span style="color:' + tmpNameColor + ';font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHTML(tmpCol.Column) + tmpBadge + '</span>';
+			tmpHTML += '<span style="color:' + tmpTypeColor + ';font-size:11px;margin-left:8px;white-space:nowrap;">' + escapeHTML(tmpCol.TypeDisplay);
+			if (tmpCol.Size)
+			{
+				tmpHTML += '(' + escapeHTML(String(tmpCol.Size)) + ')';
+			}
+			tmpHTML += '</span>';
+			tmpHTML += '</div>';
+		}
+
+		tmpHTML += '</div>';
+		return tmpHTML;
+	}
+
+	/**
+	 * Enrich flow nodes with pre-generated column detail HTML for the
+	 * properties panel.  Mutates node Data in place.
+	 */
+	function enrichFlowNodesForPanel(pRenderData)
+	{
+		if (!pRenderData || !pRenderData.Nodes) return;
+		for (var i = 0; i < pRenderData.Nodes.length; i++)
+		{
+			var tmpNode = pRenderData.Nodes[i];
+			if (tmpNode.Data && tmpNode.Data.Columns)
+			{
+				tmpNode.Data.ColumnDetailHTML = generateColumnDetailHTML(tmpNode.Data.Columns);
+			}
+		}
+	}
+
+	/**
+	 * Initialize the Pict instance and flow view for the schema flow diagram.
+	 * Only creates these once; subsequent calls just update the data.
+	 * The raw (unfiltered) flow data is always stored in flowState.currentFlowData;
+	 * the auto-connection filter is applied before rendering when enabled.
+	 */
+	function initFlowDiagram(pFlowData)
+	{
+		flowState.currentFlowData = pFlowData;
+
+		// Build the set of columns to hide based on active filter toggles
+		var tmpColumnsToHide = {};
+		if (flowState.hideAutoConnections)
+		{
+			for (var tmpCol in AUTO_CONNECTION_COLUMNS)
+			{
+				if (AUTO_CONNECTION_COLUMNS.hasOwnProperty(tmpCol)) tmpColumnsToHide[tmpCol] = true;
+			}
+		}
+		if (flowState.hideCustomerJoins)
+		{
+			for (var tmpCol in CUSTOMER_JOIN_COLUMNS)
+			{
+				if (CUSTOMER_JOIN_COLUMNS.hasOwnProperty(tmpCol)) tmpColumnsToHide[tmpCol] = true;
+			}
+		}
+
+		// Apply connection filter if any columns are being hidden
+		var tmpHasFilters = false;
+		for (var tmpKey in tmpColumnsToHide) { if (tmpColumnsToHide.hasOwnProperty(tmpKey)) { tmpHasFilters = true; break; } }
+		var tmpRenderData = tmpHasFilters ? filterFlowConnections(pFlowData, tmpColumnsToHide) : pFlowData;
+
+		// Pre-generate column detail HTML for properties panels
+		enrichFlowNodesForPanel(tmpRenderData);
+
+		// Only render when the flow tab container exists and is visible
+		var tmpContainer = document.getElementById('viz-flow-container');
+		if (!tmpContainer) return;
+
+		if (!flowState.initialized && typeof Pict !== 'undefined' && typeof PictSectionFlow !== 'undefined')
+		{
+			flowState.pict = new Pict({ Product: 'MeadowMigrationManager-Web' });
+
+			flowState.pict.AppData.FlowData = tmpRenderData;
+
+			flowState.flowView = flowState.pict.addView('SchemaFlowDiagram',
+			{
+				ViewIdentifier: 'SchemaFlowDiagram',
+
+				DefaultRenderable: 'Flow-Container',
+				DefaultDestinationAddress: '#viz-flow-container',
+
+				AutoRender: false,
+
+				FlowDataAddress: 'AppData.FlowData',
+
+				TargetElementAddress: '#viz-flow-container',
+
+				EnableToolbar: true,
+				EnablePanning: true,
+				EnableZooming: true,
+				EnableNodeDragging: true,
+				EnableConnectionCreation: false,
+				EnableGridSnap: false,
+
+				MinZoom: 0.1,
+				MaxZoom: 5.0,
+				ZoomStep: 0.1,
+
+				DefaultNodeType: 'TABLE',
+				DefaultNodeWidth: 260,
+				DefaultNodeHeight: 80,
+
+				NodeTypes:
+				{
+					'TABLE':
+					{
+						Hash: 'TABLE',
+						Label: 'Database Table',
+						DefaultWidth: 260,
+						DefaultHeight: 80,
+						DefaultPorts: [],
+						TitleBarColor: '#2c3e50',
+						BodyStyle: { fill: '#ffffff', stroke: '#d0d4d8' },
+						ShowTypeLabel: false,
+						PortLabelsOnHover: false,
+						BodyContent:
+						{
+							ContentType: 'html',
+							RenderCallback: renderTableNodeBody
+						},
+						PropertiesPanel:
+						{
+							PanelType: 'Template',
+							DefaultWidth: 360,
+							DefaultHeight: 400,
+							Title: 'Table Schema',
+							Configuration:
+							{
+								Templates:
+								[
+									{
+										Hash: 'table-schema-panel-template',
+										Template: '{~D:Record.Data.ColumnDetailHTML~}'
+									}
+								],
+								TemplateHash: 'table-schema-panel-template'
+							}
+						}
+					}
+				},
+
+				Renderables:
+				[
+					{
+						RenderableHash: 'Flow-Container',
+						TemplateHash: 'Flow-Container-Template',
+						DestinationAddress: '#viz-flow-container',
+						RenderMethod: 'replace'
+					}
+				]
+			}, PictSectionFlow);
+
+			flowState.initialized = true;
+		}
+
+		if (flowState.flowView)
+		{
+			flowState.pict.AppData.FlowData = tmpRenderData;
+			flowState.flowView.initialRenderComplete = false;
+			flowState.flowView.render();
+		}
+	}
+
+	/**
+	 * Destroy and reset the flow diagram state.
+	 * Called when switching schemas or leaving the visualizer.
+	 */
+	function destroyFlowDiagram()
+	{
+		if (!flowState) return;
+		if (flowState.flowView)
+		{
+			try { flowState.flowView.destroy(); } catch (e) { /* ignore */ }
+			flowState.flowView = null;
+		}
+		if (flowState.pict)
+		{
+			try { flowState.pict.destroy(); } catch (e) { /* ignore */ }
+			flowState.pict = null;
+		}
+		flowState.initialized = false;
+		flowState.currentFlowData = null;
+	}
+
+	/**
+	 * Destroy and recreate the flow diagram with the same data.
+	 * Handles saving the data reference, recreating the container
+	 * element (which RenderMethod:'replace' removed), and re-initializing.
+	 */
+	function rebuildFlowDiagram()
+	{
+		if (!flowState.currentFlowData) return;
+		var tmpFlowData = flowState.currentFlowData;
+		destroyFlowDiagram();
+		// RenderMethod:'replace' removed the original #viz-flow-container,
+		// so recreate it before re-initializing.
+		var tmpFlowTab = document.getElementById('viz-tab-flow');
+		if (tmpFlowTab)
+		{
+			var tmpExisting = document.getElementById('viz-flow-container');
+			if (!tmpExisting)
+			{
+				// Remove any leftover flow wrapper from the previous render
+				var tmpWrapper = document.getElementById('Flow-Wrapper-SchemaFlowDiagram');
+				if (tmpWrapper) tmpWrapper.parentNode.removeChild(tmpWrapper);
+				var tmpNewContainer = document.createElement('div');
+				tmpNewContainer.className = 'flow-diagram-container';
+				tmpNewContainer.id = 'viz-flow-container';
+				tmpFlowTab.appendChild(tmpNewContainer);
+			}
+		}
+		initFlowDiagram(tmpFlowData);
+	}
+
+	function loadVisualization(name) {
+		state.activeSchema = name;
+
+		// Reset flow state when switching schemas
+		destroyFlowDiagram();
+
+		api('GET', '/api/schemas/' + encodeURIComponent(name) + '/visualize').then(function(data) {
+			var area = document.getElementById('viz-area');
+			if (!data.Success) {
+				area.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error || 'Schema not compiled.') + '</div>';
+				area.innerHTML += '<button class="btn btn-primary" onclick="window._compileSchema(\'' + escapeHTML(name) + '\'); setTimeout(function(){ loadVisualization(\'' + escapeHTML(name) + '\'); }, 2000);">Compile Now</button>';
+				return;
+			}
+
+			var html = '<div class="tab-bar">';
+			html += '<button class="active" data-tab="flow">Flow Diagram</button>';
+			html += '<button data-tab="diagram">ASCII Diagram</button>';
+			html += '<button data-tab="tables">Table List</button>';
+			html += '<button data-tab="relationships">Relationships</button>';
+			html += '<button data-tab="details">Table Details</button>';
+			html += '</div>';
+
+			html += '<div id="viz-tab-flow">';
+		html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;margin-bottom:8px;">';
+		html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;cursor:pointer;user-select:none;">';
+		html += '<input type="checkbox" id="viz-hide-auto-conns"' + (flowState.hideAutoConnections ? ' checked' : '') + '>';
+		html += 'Hide audit trail connections <span style="color:#999;font-size:11px;">(CreatingIDUser, UpdatingIDUser, DeletingIDUser)</span>';
+		html += '</label>';
+		html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;cursor:pointer;user-select:none;">';
+		html += '<input type="checkbox" id="viz-hide-customer-joins"' + (flowState.hideCustomerJoins ? ' checked' : '') + '>';
+		html += 'Hide customer joins <span style="color:#999;font-size:11px;">(IDCustomer → Customer)</span>';
+		html += '</label>';
+		html += '</div>';
+		html += '<div class="flow-diagram-container" id="viz-flow-container"></div>';
+		html += '</div>';
+			html += '<div id="viz-tab-diagram" style="display:none"><pre class="code-block">' + escapeHTML(data.ASCIIDiagram) + '</pre></div>';
+			html += '<div id="viz-tab-tables" style="display:none"><pre class="code-block">' + escapeHTML(data.TableList) + '</pre></div>';
+			html += '<div id="viz-tab-relationships" style="display:none"><pre class="code-block">' + escapeHTML(data.RelationshipMap) + '</pre></div>';
+			html += '<div id="viz-tab-details" style="display:none">';
+			for (var i = 0; i < data.TableDetails.length; i++) {
+				html += '<pre class="code-block">' + escapeHTML(data.TableDetails[i]) + '</pre>';
+			}
+			html += '</div>';
+
+			area.innerHTML = html;
+
+			// Tab switching
+			area.querySelector('.tab-bar').addEventListener('click', function(e) {
+				if (e.target.dataset.tab) {
+					var tabs = area.querySelectorAll('.tab-bar button');
+					for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+					e.target.classList.add('active');
+					var panels = ['flow', 'diagram', 'tables', 'relationships', 'details'];
+					for (var i = 0; i < panels.length; i++) {
+						var el = document.getElementById('viz-tab-' + panels[i]);
+						if (el) el.style.display = (panels[i] === e.target.dataset.tab) ? 'block' : 'none';
+					}
+					// Initialize flow when its tab is shown
+					if (e.target.dataset.tab === 'flow' && flowState.currentFlowData)
+					{
+						initFlowDiagram(flowState.currentFlowData);
+					}
+				}
+			});
+
+			// Wire up the auto-connection toggle
+			var tmpAutoConnToggle = document.getElementById('viz-hide-auto-conns');
+			if (tmpAutoConnToggle)
+			{
+				tmpAutoConnToggle.addEventListener('change', function() {
+					flowState.hideAutoConnections = this.checked;
+					rebuildFlowDiagram();
+				});
+			}
+
+			// Wire up the customer joins toggle
+			var tmpCustomerJoinToggle = document.getElementById('viz-hide-customer-joins');
+			if (tmpCustomerJoinToggle)
+			{
+				tmpCustomerJoinToggle.addEventListener('change', function() {
+					flowState.hideCustomerJoins = this.checked;
+					rebuildFlowDiagram();
+				});
+			}
+
+			// Initialize flow diagram with the FlowData from the API
+			if (data.FlowData)
+			{
+				initFlowDiagram(data.FlowData);
+			}
+		});
+	}
+	window.loadVisualization = loadVisualization;
+
+	// ============================================================
+	// Meadow Config
+	// ============================================================
+	function renderMeadowConfig() {
+		loadSchemas(function() {
+			var html = '<h2>Meadow Config</h2>';
+			html += '<div class="form-group"><label>Schema</label>';
+			html += renderSchemaSelector(state.activeSchema || (state.schemas[0] && state.schemas[0].Name), 'pkg-schema-select');
+			html += '</div>';
+			html += '<div id="pkg-area"><p class="loading">Loading...</p></div>';
+			content.innerHTML = html;
+
+			var sel = document.getElementById('pkg-schema-select');
+			loadMeadowPackages(sel.value);
+			sel.addEventListener('change', function() { loadMeadowPackages(sel.value); });
+		});
+	}
+
+	function loadMeadowPackages(name) {
+		state.activeSchema = name;
+		api('GET', '/api/schemas/' + encodeURIComponent(name) + '/meadow-packages').then(function(data) {
+			var area = document.getElementById('pkg-area');
+			if (!data.Success) {
+				area.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error || 'Schema not compiled.') + '</div>';
+				return;
+			}
+			var html = '<p>' + data.MeadowPackages.length + ' package(s) generated:</p>';
+			for (var i = 0; i < data.MeadowPackages.length; i++) {
+				var pkg = data.MeadowPackages[i];
+				html += '<h3 style="margin-top:16px">' + escapeHTML(pkg.Scope) + '</h3>';
+				html += '<div class="json-viewer">' + escapeHTML(JSON.stringify(pkg, null, 2)) + '</div>';
+			}
+			area.innerHTML = html;
+		});
+	}
+
+	// ============================================================
+	// Connection Selector Helper
+	// ============================================================
+	function renderConnectionSelector(selectedName, id) {
+		var html = '<select id="' + id + '">';
+		html += '<option value="">-- Select Connection --</option>';
+		for (var i = 0; i < state.connections.length; i++) {
+			var selected = (state.connections[i].Name === selectedName) ? ' selected' : '';
+			html += '<option value="' + escapeHTML(state.connections[i].Name) + '"' + selected + '>';
+			html += escapeHTML(state.connections[i].Name) + ' (' + escapeHTML(state.connections[i].Type) + ')';
+			html += '</option>';
+		}
+		html += '</select>';
+		return html;
+	}
+
+	// ============================================================
+	// Connections
+	// ============================================================
+	function renderConnections() {
+		loadConnections(function() {
+			loadProviders(function() {
+				var html = '<h2>Database Connections</h2>';
+
+				// Connection list table
+				if (state.connections.length > 0) {
+					html += '<table class="schema-table"><thead><tr>';
+					html += '<th>Name</th><th>Type</th><th>Server</th><th>Database</th><th>Actions</th>';
+					html += '</tr></thead><tbody>';
+					for (var i = 0; i < state.connections.length; i++) {
+						var c = state.connections[i];
+						html += '<tr>';
+						html += '<td>' + escapeHTML(c.Name) + '</td>';
+						html += '<td><span class="badge badge-yes">' + escapeHTML(c.Type) + '</span></td>';
+						html += '<td>' + escapeHTML(c.Config.server || '(default)') + ':' + escapeHTML(String(c.Config.port || '(default)')) + '</td>';
+						html += '<td>' + escapeHTML(c.Config.database || '(not set)') + '</td>';
+						html += '<td>';
+						html += '<button class="btn btn-primary" onclick="window._testConnection(\'' + escapeHTML(c.Name) + '\')">Test</button>';
+						html += '<button class="btn btn-secondary" onclick="window._introspectConnection(\'' + escapeHTML(c.Name) + '\')">Introspect</button>';
+						html += '<button class="btn btn-secondary" onclick="window._deleteConnection(\'' + escapeHTML(c.Name) + '\')">Delete</button>';
+						html += '</td></tr>';
+					}
+					html += '</tbody></table>';
+				} else {
+					html += '<p>No connections configured. Add one below.</p>';
+				}
+
+				html += '<div id="conn-status-area"></div>';
+
+				// Add Connection form
+				html += '<h3 style="margin-top:24px;margin-bottom:12px">Add Connection</h3>';
+				html += '<div class="form-row">';
+				html += '<div class="form-group"><label>Name</label>';
+				html += '<input type="text" id="conn-name" placeholder="my-database"></div>';
+				html += '<div class="form-group"><label>Type</label>';
+				html += '<select id="conn-type">';
+				if (state.providers.length > 0) {
+					for (var j = 0; j < state.providers.length; j++) {
+						html += '<option>' + escapeHTML(state.providers[j]) + '</option>';
+					}
+				} else {
+					html += '<option>MySQL</option><option>PostgreSQL</option><option>MSSQL</option><option>SQLite</option>';
+				}
+				html += '</select></div>';
+				html += '</div>';
+				html += '<div class="form-row">';
+				html += '<div class="form-group"><label>Server / Host</label>';
+				html += '<input type="text" id="conn-server" placeholder="localhost"></div>';
+				html += '<div class="form-group"><label>Port</label>';
+				html += '<input type="number" id="conn-port" placeholder="3306"></div>';
+				html += '</div>';
+				html += '<div class="form-row">';
+				html += '<div class="form-group"><label>User</label>';
+				html += '<input type="text" id="conn-user" placeholder="root"></div>';
+				html += '<div class="form-group"><label>Password</label>';
+				html += '<input type="password" id="conn-password" placeholder=""></div>';
+				html += '</div>';
+				html += '<div class="form-row">';
+				html += '<div class="form-group"><label>Database</label>';
+				html += '<input type="text" id="conn-database" placeholder="my_database"></div>';
+				html += '</div>';
+				html += '<div style="margin-top:8px">';
+				html += '<button class="btn btn-primary" id="conn-test-btn">Test Connection</button>';
+				html += '<button class="btn btn-success" id="conn-save-btn">Save Connection</button>';
+				html += '</div>';
+				html += '<div id="conn-form-status"></div>';
+
+				content.innerHTML = html;
+
+				// Test unsaved connection
+				document.getElementById('conn-test-btn').addEventListener('click', function() {
+					var tmpConfig = _getConnectionFormConfig();
+					var tmpStatusEl = document.getElementById('conn-form-status');
+					tmpStatusEl.innerHTML = '<p class="loading">Testing connection...</p>';
+
+					api('POST', '/api/connections/test', { Type: tmpConfig.Type, Config: tmpConfig.Config }).then(function(data) {
+						if (data.Success) {
+							tmpStatusEl.innerHTML = '<div class="status-msg status-success">Connection successful! Found ' + data.TableCount + ' table(s).</div>';
+						} else {
+							tmpStatusEl.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error) + '</div>';
+						}
+					}).catch(function(err) {
+						tmpStatusEl.innerHTML = '<div class="status-msg status-error">Request failed.</div>';
+					});
+				});
+
+				// Save connection
+				document.getElementById('conn-save-btn').addEventListener('click', function() {
+					var tmpConfig = _getConnectionFormConfig();
+					var tmpStatusEl = document.getElementById('conn-form-status');
+
+					if (!tmpConfig.Name) {
+						tmpStatusEl.innerHTML = '<div class="status-msg status-error">Connection name is required.</div>';
+						return;
+					}
+
+					var tmpNewConn = { Name: tmpConfig.Name, Type: tmpConfig.Type, Config: tmpConfig.Config };
+
+					// Save to localStorage (primary store, includes password)
+					var tmpExistingIdx = -1;
+					for (var i = 0; i < state.connections.length; i++) {
+						if (state.connections[i].Name === tmpConfig.Name) { tmpExistingIdx = i; break; }
+					}
+					if (tmpExistingIdx >= 0) {
+						state.connections[tmpExistingIdx] = tmpNewConn;
+					} else {
+						state.connections.push(tmpNewConn);
+					}
+					_persistConnectionsToStorage();
+
+					// Also save to server so test/introspect work
+					api('POST', '/api/connections', tmpNewConn).then(function(data) {
+						if (data.Success) {
+							tmpStatusEl.innerHTML = '<div class="status-msg status-success">Connection saved.</div>';
+							renderConnections();
+						} else {
+							// Still saved locally even if server fails
+							tmpStatusEl.innerHTML = '<div class="status-msg status-success">Connection saved locally.</div>';
+							renderConnections();
+						}
+					}).catch(function(err) {
+						tmpStatusEl.innerHTML = '<div class="status-msg status-success">Connection saved locally.</div>';
+						renderConnections();
+					});
+				});
+			});
+		});
+	}
+
+	function _getConnectionFormConfig() {
+		return {
+			Name: document.getElementById('conn-name').value.trim(),
+			Type: document.getElementById('conn-type').value,
+			Config: {
+				server: document.getElementById('conn-server').value.trim(),
+				port: parseInt(document.getElementById('conn-port').value, 10) || undefined,
+				user: document.getElementById('conn-user').value.trim(),
+				password: document.getElementById('conn-password').value,
+				database: document.getElementById('conn-database').value.trim()
+			}
+		};
+	}
+
+	window._testConnection = function(name) {
+		var statusEl = document.getElementById('conn-status-area');
+		statusEl.innerHTML = '<p class="loading">Testing connection [' + escapeHTML(name) + ']...</p>';
+
+		api('POST', '/api/connections/' + encodeURIComponent(name) + '/test').then(function(data) {
+			if (data.Success) {
+				statusEl.innerHTML = '<div class="status-msg status-success"><span class="conn-status conn-status-ok"></span>Connection [' + escapeHTML(name) + '] successful! Found ' + data.TableCount + ' table(s).</div>';
+			} else {
+				statusEl.innerHTML = '<div class="status-msg status-error"><span class="conn-status conn-status-fail"></span>' + escapeHTML(data.Error) + '</div>';
+			}
+		}).catch(function() {
+			statusEl.innerHTML = '<div class="status-msg status-error">Request failed.</div>';
+		});
+	};
+
+	window._introspectConnection = function(name) {
+		var statusEl = document.getElementById('conn-status-area');
+		statusEl.innerHTML = '<p class="loading">Introspecting connection [' + escapeHTML(name) + ']...</p>';
+
+		api('POST', '/api/connections/' + encodeURIComponent(name) + '/introspect', { saveAs: name }).then(function(data) {
+			if (data.Success) {
+				var schema = data.Schema;
+				var tableCount = schema && schema.Tables ? schema.Tables.length : 0;
+				var html = '<div class="status-msg status-success">Introspection of [' + escapeHTML(name) + '] complete — ' + tableCount + ' table(s) discovered.';
+				if (data.SavedAs) {
+					html += ' Saved to Schema Library as <strong>' + escapeHTML(data.SavedAs) + '</strong>.';
+				}
+				html += '</div>';
+
+				// Save-to-library controls (to save under a different name)
+				html += '<div style="margin:8px 0 12px;display:flex;align-items:center;gap:8px">';
+				html += '<label style="white-space:nowrap">Save as:</label>';
+				html += '<input type="text" id="introspect-save-name" value="' + escapeHTML(name) + '" style="width:220px">';
+				html += '<button class="btn btn-success" id="introspect-save-btn">Save to Schema Library</button>';
+				html += '<span id="introspect-save-status"></span>';
+				html += '</div>';
+
+				if (schema && schema.Tables) {
+					html += '<table class="schema-table"><thead><tr><th>Table</th><th>Columns</th></tr></thead><tbody>';
+					for (var i = 0; i < schema.Tables.length; i++) {
+						var t = schema.Tables[i];
+						var colCount = Array.isArray(t.Columns) ? t.Columns.length : 0;
+						html += '<tr><td>' + escapeHTML(t.TableName) + '</td><td>' + colCount + '</td></tr>';
+					}
+					html += '</tbody></table>';
+				}
+
+				statusEl.innerHTML = html;
+
+				// Wire up the save button for re-saving under a different name
+				document.getElementById('introspect-save-btn').addEventListener('click', function() {
+					var saveName = document.getElementById('introspect-save-name').value.trim();
+					var saveStatus = document.getElementById('introspect-save-status');
+					if (!saveName) {
+						saveStatus.innerHTML = '<span style="color:#e74c3c">Name is required.</span>';
+						return;
+					}
+					saveStatus.innerHTML = '<span class="loading">Saving...</span>';
+					api('POST', '/api/connections/' + encodeURIComponent(name) + '/introspect', { saveAs: saveName }).then(function(res) {
+						if (res.Success && res.SavedAs) {
+							saveStatus.innerHTML = '<span style="color:#27ae60">Saved as <strong>' + escapeHTML(res.SavedAs) + '</strong>.</span>';
+						} else {
+							saveStatus.innerHTML = '<span style="color:#e74c3c">' + escapeHTML(res.Error || 'Save failed.') + '</span>';
+						}
+					}).catch(function() {
+						saveStatus.innerHTML = '<span style="color:#e74c3c">Request failed.</span>';
+					});
+				});
+			} else {
+				statusEl.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error) + '</div>';
+			}
+		}).catch(function() {
+			statusEl.innerHTML = '<div class="status-msg status-error">Request failed.</div>';
+		});
+	};
+
+	window._deleteConnection = function(name) {
+		if (!confirm('Delete connection [' + name + ']?')) return;
+
+		// Remove from localStorage
+		state.connections = state.connections.filter(function(c) { return c.Name !== name; });
+		_persistConnectionsToStorage();
+
+		// Also remove from server
+		api('DELETE', '/api/connections/' + encodeURIComponent(name)).then(function(data) {
+			renderConnections();
+		}).catch(function() {
+			renderConnections();
+		});
+	};
+
+	// ============================================================
+	// Source Type Toggle Helper
+	// ============================================================
+	function renderSourceTypeToggle(prefix, side) {
+		var html = '<div class="source-toggle" id="' + prefix + '-' + side + '-toggle">';
+		html += '<input type="radio" name="' + prefix + '-' + side + '-type" id="' + prefix + '-' + side + '-schema" value="schema" checked>';
+		html += '<label for="' + prefix + '-' + side + '-schema">DDL Schema</label>';
+		html += '<input type="radio" name="' + prefix + '-' + side + '-type" id="' + prefix + '-' + side + '-conn" value="connection">';
+		html += '<label for="' + prefix + '-' + side + '-conn">Database</label>';
+		html += '</div>';
+		return html;
+	}
+
+	function setupSourceTypeToggle(prefix, side) {
+		var schemaRadio = document.getElementById(prefix + '-' + side + '-schema');
+		var connRadio = document.getElementById(prefix + '-' + side + '-conn');
+		var schemaEl = document.getElementById(prefix + '-' + side + '-schema-picker');
+		var connEl = document.getElementById(prefix + '-' + side + '-conn-picker');
+
+		if (!schemaRadio || !connRadio || !schemaEl || !connEl) return;
+
+		function updateVisibility() {
+			if (schemaRadio.checked) {
+				schemaEl.style.display = '';
+				connEl.style.display = 'none';
+			} else {
+				schemaEl.style.display = 'none';
+				connEl.style.display = '';
+			}
+		}
+
+		schemaRadio.addEventListener('change', updateVisibility);
+		connRadio.addEventListener('change', updateVisibility);
+		updateVisibility();
+	}
+
+	function getSourceValue(prefix, side) {
+		var schemaRadio = document.getElementById(prefix + '-' + side + '-schema');
+		if (schemaRadio && schemaRadio.checked) {
+			var selectEl = document.getElementById(prefix + '-' + side + '-select');
+			return { type: 'schema', value: selectEl ? selectEl.value : '' };
+		} else {
+			var connSelect = document.getElementById(prefix + '-' + side + '-conn-select');
+			return { type: 'connection', value: connSelect ? connSelect.value : '' };
+		}
+	}
+
+	// ============================================================
+	// Schema Diff
+	// ============================================================
+	function renderSchemaDiff() {
+		loadSchemas(function() {
+			loadConnections(function() {
+				var html = '<h2>Schema Diff</h2>';
+				var firstName = state.schemas[0] ? state.schemas[0].Name : '';
+				var secondName = state.schemas[1] ? state.schemas[1].Name : firstName;
+
+				html += '<div style="display:flex;gap:24px;margin-bottom:16px">';
+
+				// Source side
+				html += '<div class="form-group"><label>Source (current state)</label>';
+				html += renderSourceTypeToggle('diff', 'source');
+				html += '<div id="diff-source-schema-picker">';
+				html += renderSchemaSelector(firstName, 'diff-source-select');
+				html += '</div>';
+				html += '<div id="diff-source-conn-picker" style="display:none">';
+				html += renderConnectionSelector('', 'diff-source-conn-select');
+				html += '</div>';
+				html += '</div>';
+
+				// Target side
+				html += '<div class="form-group"><label>Target (desired state)</label>';
+				html += renderSourceTypeToggle('diff', 'target');
+				html += '<div id="diff-target-schema-picker">';
+				html += renderSchemaSelector(secondName, 'diff-target-select');
+				html += '</div>';
+				html += '<div id="diff-target-conn-picker" style="display:none">';
+				html += renderConnectionSelector('', 'diff-target-conn-select');
+				html += '</div>';
+				html += '</div>';
+
+				html += '</div>';
+				html += '<button class="btn btn-primary" id="diff-run-btn">Run Diff</button>';
+				html += '<div id="diff-area"></div>';
+				content.innerHTML = html;
+
+				setupSourceTypeToggle('diff', 'source');
+				setupSourceTypeToggle('diff', 'target');
+
+				document.getElementById('diff-run-btn').addEventListener('click', function() {
+					var sourceVal = getSourceValue('diff', 'source');
+					var targetVal = getSourceValue('diff', 'target');
+					var diffArea = document.getElementById('diff-area');
+
+					if (!sourceVal.value) {
+						diffArea.innerHTML = '<div class="status-msg status-error">Please select a source.</div>';
+						return;
+					}
+					if (!targetVal.value) {
+						diffArea.innerHTML = '<div class="status-msg status-error">Please select a target.</div>';
+						return;
+					}
+
+					diffArea.innerHTML = '<p class="loading">Running diff...</p>';
+
+					var body = {};
+					if (sourceVal.type === 'schema') { body.source = sourceVal.value; }
+					else { body.sourceConnection = sourceVal.value; }
+					if (targetVal.type === 'schema') { body.target = targetVal.value; }
+					else { body.targetConnection = targetVal.value; }
+
+					var sourceLabel = sourceVal.type === 'connection' ? 'DB:' + sourceVal.value : sourceVal.value;
+					var targetLabel = targetVal.type === 'connection' ? 'DB:' + targetVal.value : targetVal.value;
+
+					api('POST', '/api/schemas/diff', body).then(function(data) {
+						if (!data.Success) {
+							diffArea.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error) + '</div>';
+							return;
+						}
+						var d = data.Diff;
+						var html = '<h3 style="margin-top:16px">Diff: ' + escapeHTML(sourceLabel) + ' &rarr; ' + escapeHTML(targetLabel) + '</h3>';
+						html += '<p>Tables Added: ' + d.TablesAdded.length + ' | Tables Removed: ' + d.TablesRemoved.length + ' | Tables Modified: ' + d.TablesModified.length + '</p>';
+						html += '<div class="json-viewer">' + escapeHTML(JSON.stringify(d, null, 2)) + '</div>';
+
+						// Store diff for migration script generation
+						window._lastDiff = d;
+						html += '<div style="margin-top:16px"><button class="btn btn-success" id="diff-generate-btn">Generate Migration Script</button></div>';
+						html += '<div id="diff-script-area"></div>';
+						diffArea.innerHTML = html;
+
+						document.getElementById('diff-generate-btn').addEventListener('click', function() {
+							renderMigrationFromDiff(d);
+						});
+					});
+				});
+			});
+		});
+	}
+
+	function renderMigrationFromDiff(diff) {
+		var scriptArea = document.getElementById('diff-script-area');
+		var html = '<div class="form-group" style="margin-top:16px"><label>Database Type</label>';
+		html += '<select id="diff-db-type"><option>MySQL</option><option>PostgreSQL</option><option>MSSQL</option><option>SQLite</option></select></div>';
+		html += '<button class="btn btn-primary" id="diff-gen-btn">Generate</button>';
+		html += '<div id="diff-script-output"></div>';
+		scriptArea.innerHTML = html;
+
+		document.getElementById('diff-gen-btn').addEventListener('click', function() {
+			var dbType = document.getElementById('diff-db-type').value;
+			api('POST', '/api/schemas/generate-migration', { diff: diff, databaseType: dbType }).then(function(data) {
+				var outputEl = document.getElementById('diff-script-output');
+				if (!data.Success) {
+					outputEl.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error) + '</div>';
+					return;
+				}
+				outputEl.innerHTML = '<h3 style="margin-top:16px">' + escapeHTML(dbType) + ' Migration Script</h3><pre class="code-block">' + escapeHTML(data.Script) + '</pre>';
+			});
+		});
+	}
+
+	// ============================================================
+	// Migration Script
+	// ============================================================
+	function renderMigrationScript() {
+		loadSchemas(function() {
+			loadConnections(function() {
+				var html = '<h2>Migration Script Generator</h2>';
+				var firstName = state.schemas[0] ? state.schemas[0].Name : '';
+				var secondName = state.schemas[1] ? state.schemas[1].Name : firstName;
+
+				html += '<div style="display:flex;gap:24px;margin-bottom:16px">';
+
+				// Source side
+				html += '<div class="form-group"><label>Source (current state)</label>';
+				html += renderSourceTypeToggle('mig', 'source');
+				html += '<div id="mig-source-schema-picker">';
+				html += renderSchemaSelector(firstName, 'mig-source-select');
+				html += '</div>';
+				html += '<div id="mig-source-conn-picker" style="display:none">';
+				html += renderConnectionSelector('', 'mig-source-conn-select');
+				html += '</div>';
+				html += '</div>';
+
+				// Target side
+				html += '<div class="form-group"><label>Target (desired state)</label>';
+				html += renderSourceTypeToggle('mig', 'target');
+				html += '<div id="mig-target-schema-picker">';
+				html += renderSchemaSelector(secondName, 'mig-target-select');
+				html += '</div>';
+				html += '<div id="mig-target-conn-picker" style="display:none">';
+				html += renderConnectionSelector('', 'mig-target-conn-select');
+				html += '</div>';
+				html += '</div>';
+
+				// Database type
+				html += '<div class="form-group"><label>Database Type</label>';
+				html += '<select id="mig-db-type"><option>MySQL</option><option>PostgreSQL</option><option>MSSQL</option><option>SQLite</option></select>';
+				html += '</div>';
+
+				html += '</div>';
+				html += '<button class="btn btn-primary" id="mig-run-btn">Generate Migration</button>';
+				html += '<div id="mig-area"></div>';
+				content.innerHTML = html;
+
+				setupSourceTypeToggle('mig', 'source');
+				setupSourceTypeToggle('mig', 'target');
+
+				document.getElementById('mig-run-btn').addEventListener('click', function() {
+					var sourceVal = getSourceValue('mig', 'source');
+					var targetVal = getSourceValue('mig', 'target');
+					var dbType = document.getElementById('mig-db-type').value;
+					var migArea = document.getElementById('mig-area');
+
+					if (!sourceVal.value) {
+						migArea.innerHTML = '<div class="status-msg status-error">Please select a source.</div>';
+						return;
+					}
+					if (!targetVal.value) {
+						migArea.innerHTML = '<div class="status-msg status-error">Please select a target.</div>';
+						return;
+					}
+
+					migArea.innerHTML = '<p class="loading">Generating migration script...</p>';
+
+					var body = {};
+					if (sourceVal.type === 'schema') { body.source = sourceVal.value; }
+					else { body.sourceConnection = sourceVal.value; }
+					if (targetVal.type === 'schema') { body.target = targetVal.value; }
+					else { body.targetConnection = targetVal.value; }
+
+					var sourceLabel = sourceVal.type === 'connection' ? 'DB:' + sourceVal.value : sourceVal.value;
+					var targetLabel = targetVal.type === 'connection' ? 'DB:' + targetVal.value : targetVal.value;
+
+					// First diff, then generate
+					api('POST', '/api/schemas/diff', body).then(function(data) {
+						if (!data.Success) {
+							migArea.innerHTML = '<div class="status-msg status-error">' + escapeHTML(data.Error) + '</div>';
+							return;
+						}
+
+						return api('POST', '/api/schemas/generate-migration', { diff: data.Diff, databaseType: dbType }).then(function(scriptData) {
+							if (!scriptData.Success) {
+								migArea.innerHTML = '<div class="status-msg status-error">' + escapeHTML(scriptData.Error) + '</div>';
+								return;
+							}
+							var html = '<h3 style="margin-top:16px">' + escapeHTML(dbType) + ' Migration: ' + escapeHTML(sourceLabel) + ' &rarr; ' + escapeHTML(targetLabel) + '</h3>';
+							html += '<pre class="code-block">' + escapeHTML(scriptData.Script) + '</pre>';
+							migArea.innerHTML = html;
+						});
+					});
+				});
+			});
+		});
+	}
+
+	// ---- Initial load ----
+	renderSchemaLibrary();
+})();
+</script>
+
+</body>
+</html>

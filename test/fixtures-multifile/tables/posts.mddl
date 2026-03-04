@@ -1,0 +1,6 @@
+!Post
+@IDPost
+$Title 256
+*Body
+&PublishDate
+~IDUser -> IDUser

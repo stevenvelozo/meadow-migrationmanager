@@ -1,0 +1,6 @@
+!Comment
+@IDComment
+*Text
+&CommentDate
+~IDPost -> IDPost
+~IDUser -> IDUser
