@@ -856,9 +856,188 @@ suite
 						let tmpStatements = tmpMigGen.generateMigrationStatements(tmpDiff, 'MSSQL');
 						libAssert.strictEqual(tmpStatements.length, 1);
 						libAssert.ok(tmpStatements[0].indexOf('ALTER TABLE') >= 0);
-						libAssert.ok(tmpStatements[0].indexOf('ADD COLUMN') >= 0);
+						// MSSQL uses ADD without COLUMN keyword
+						libAssert.ok(tmpStatements[0].indexOf(' ADD ') >= 0);
+						libAssert.ok(tmpStatements[0].indexOf('ADD COLUMN') < 0, 'MSSQL should not use ADD COLUMN');
 						libAssert.ok(tmpStatements[0].indexOf('[Genre]') >= 0, 'Should use bracket quoting for MSSQL');
 						libAssert.ok(tmpStatements[0].indexOf('NVARCHAR') >= 0, 'String should map to NVARCHAR for MSSQL');
+					}
+				);
+
+				test
+				(
+					'Should generate ADD COLUMN with COLUMN keyword for non-MSSQL engines',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpMigGen = tmpManager.instantiateServiceProvider('MigrationGenerator');
+
+						let tmpDiff = {
+							TablesAdded: [],
+							TablesRemoved: [],
+							TablesModified: [{
+								TableName: 'Book',
+								ColumnsAdded: [{ Column: 'Genre', DataType: 'String', Size: '128' }],
+								ColumnsRemoved: [],
+								ColumnsModified: [],
+								IndicesAdded: [],
+								IndicesRemoved: [],
+								ForeignKeysAdded: [],
+								ForeignKeysRemoved: []
+							}]
+						};
+
+						let tmpMySQL = tmpMigGen.generateMigrationStatements(tmpDiff, 'MySQL');
+						libAssert.ok(tmpMySQL[0].indexOf('ADD COLUMN') >= 0, 'MySQL should use ADD COLUMN');
+
+						let tmpPostgreSQL = tmpMigGen.generateMigrationStatements(tmpDiff, 'PostgreSQL');
+						libAssert.ok(tmpPostgreSQL[0].indexOf('ADD COLUMN') >= 0, 'PostgreSQL should use ADD COLUMN');
+
+						let tmpSQLite = tmpMigGen.generateMigrationStatements(tmpDiff, 'SQLite');
+						libAssert.ok(tmpSQLite[0].indexOf('ADD COLUMN') >= 0, 'SQLite should use ADD COLUMN');
+					}
+				);
+
+				test
+				(
+					'Should generate ALTER COLUMN without DEFAULT for MSSQL',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpMigGen = tmpManager.instantiateServiceProvider('MigrationGenerator');
+
+						let tmpDiff = {
+							TablesAdded: [],
+							TablesRemoved: [],
+							TablesModified: [{
+								TableName: 'Sample',
+								ColumnsAdded: [],
+								ColumnsRemoved: [],
+								ColumnsModified: [
+									{
+										Column: 'BuyUSA',
+										DataType: 'Boolean',
+										Changes: { DataType: { From: 'Numeric', To: 'Boolean' } }
+									},
+									{
+										Column: 'ExternalSyncGUID',
+										DataType: 'String',
+										Size: '64',
+										Changes: { Size: { From: '36', To: '64' } }
+									}
+								],
+								IndicesAdded: [],
+								IndicesRemoved: [],
+								ForeignKeysAdded: [],
+								ForeignKeysRemoved: []
+							}]
+						};
+
+						let tmpStatements = tmpMigGen.generateMigrationStatements(tmpDiff, 'MSSQL');
+						libAssert.strictEqual(tmpStatements.length, 2);
+
+						// BuyUSA: type change — should ALTER COLUMN without DEFAULT
+						libAssert.ok(tmpStatements[0].indexOf('ALTER COLUMN') >= 0, 'Should use ALTER COLUMN');
+						libAssert.ok(tmpStatements[0].indexOf('[BuyUSA]') >= 0, 'Should reference BuyUSA');
+						libAssert.ok(tmpStatements[0].indexOf('BIT NOT NULL') >= 0, 'Boolean should map to BIT NOT NULL');
+						libAssert.ok(tmpStatements[0].indexOf('DEFAULT') < 0, 'MSSQL ALTER COLUMN must not contain DEFAULT');
+
+						// ExternalSyncGUID: size-only change — should still generate ALTER COLUMN
+						libAssert.ok(tmpStatements[1].indexOf('ALTER COLUMN') >= 0, 'Should use ALTER COLUMN for size change');
+						libAssert.ok(tmpStatements[1].indexOf('[ExternalSyncGUID]') >= 0, 'Should reference ExternalSyncGUID');
+						libAssert.ok(tmpStatements[1].indexOf('NVARCHAR(64)') >= 0, 'Should use new size');
+						libAssert.ok(tmpStatements[1].indexOf('DEFAULT') < 0, 'MSSQL ALTER COLUMN must not contain DEFAULT');
+					}
+				);
+
+				test
+				(
+					'Should generate ALTER COLUMN with DEFAULT for non-MSSQL engines',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpMigGen = tmpManager.instantiateServiceProvider('MigrationGenerator');
+
+						let tmpDiff = {
+							TablesAdded: [],
+							TablesRemoved: [],
+							TablesModified: [{
+								TableName: 'Sample',
+								ColumnsAdded: [],
+								ColumnsRemoved: [],
+								ColumnsModified: [
+									{
+										Column: 'IsActive',
+										DataType: 'Boolean',
+										Changes: { DataType: { From: 'Numeric', To: 'Boolean' } }
+									}
+								],
+								IndicesAdded: [],
+								IndicesRemoved: [],
+								ForeignKeysAdded: [],
+								ForeignKeysRemoved: []
+							}]
+						};
+
+						let tmpMySQL = tmpMigGen.generateMigrationStatements(tmpDiff, 'MySQL');
+						libAssert.ok(tmpMySQL[0].indexOf('MODIFY COLUMN') >= 0, 'MySQL should use MODIFY COLUMN');
+						libAssert.ok(tmpMySQL[0].indexOf('DEFAULT') >= 0, 'MySQL ALTER should include DEFAULT');
+
+						let tmpPostgreSQL = tmpMigGen.generateMigrationStatements(tmpDiff, 'PostgreSQL');
+						libAssert.ok(tmpPostgreSQL[0].indexOf('ALTER COLUMN') >= 0, 'PostgreSQL should use ALTER COLUMN');
+						libAssert.ok(tmpPostgreSQL[0].indexOf('TYPE') >= 0, 'PostgreSQL should use TYPE keyword');
+					}
+				);
+
+				test
+				(
+					'Should generate ALTER COLUMN for size-only changes using target DataType',
+					function ()
+					{
+						let tmpManager = new libMeadowMigrationManager({});
+						let tmpMigGen = tmpManager.instantiateServiceProvider('MigrationGenerator');
+
+						// Size-only change: DataType is the same (String), only Size changed
+						let tmpDiff = {
+							TablesAdded: [],
+							TablesRemoved: [],
+							TablesModified: [{
+								TableName: 'Book',
+								ColumnsAdded: [],
+								ColumnsRemoved: [],
+								ColumnsModified: [
+									{
+										Column: 'Title',
+										DataType: 'String',
+										Size: '512',
+										Changes: { Size: { From: '200', To: '512' } }
+									}
+								],
+								IndicesAdded: [],
+								IndicesRemoved: [],
+								ForeignKeysAdded: [],
+								ForeignKeysRemoved: []
+							}]
+						};
+
+						// MySQL: should generate MODIFY COLUMN with new size
+						let tmpMySQL = tmpMigGen.generateMigrationStatements(tmpDiff, 'MySQL');
+						libAssert.strictEqual(tmpMySQL.length, 1, 'Should generate one statement');
+						libAssert.ok(tmpMySQL[0].indexOf('MODIFY COLUMN') >= 0, 'MySQL should use MODIFY COLUMN');
+						libAssert.ok(tmpMySQL[0].indexOf('512') >= 0, 'Should use new size');
+
+						// MSSQL: should generate ALTER COLUMN without DEFAULT
+						let tmpMSSQL = tmpMigGen.generateMigrationStatements(tmpDiff, 'MSSQL');
+						libAssert.strictEqual(tmpMSSQL.length, 1, 'Should generate one statement');
+						libAssert.ok(tmpMSSQL[0].indexOf('ALTER COLUMN') >= 0, 'MSSQL should use ALTER COLUMN');
+						libAssert.ok(tmpMSSQL[0].indexOf('NVARCHAR(512)') >= 0, 'Should use new size');
+						libAssert.ok(tmpMSSQL[0].indexOf('DEFAULT') < 0, 'MSSQL ALTER COLUMN must not contain DEFAULT');
+
+						// PostgreSQL: should generate ALTER COLUMN TYPE with new size
+						let tmpPG = tmpMigGen.generateMigrationStatements(tmpDiff, 'PostgreSQL');
+						libAssert.strictEqual(tmpPG.length, 1, 'Should generate one statement');
+						libAssert.ok(tmpPG[0].indexOf('ALTER COLUMN') >= 0, 'PostgreSQL should use ALTER COLUMN');
+						libAssert.ok(tmpPG[0].indexOf('VARCHAR(512)') >= 0, 'Should use new size');
 					}
 				);
 

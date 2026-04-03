@@ -303,6 +303,10 @@ class MigrationManagerServiceSchemaDiff extends libFableServiceBase
 				{
 					tmpTableDiff.ColumnsModified.push({
 						Column: tmpColumnName,
+						// Include target column DataType and Size so MigrationGenerator
+						// can produce valid ALTER statements for size-only changes
+						DataType: tmpTargetCol.DataType,
+						Size: tmpTargetCol.hasOwnProperty('Size') ? tmpTargetCol.Size : undefined,
 						Changes: tmpChanges
 					});
 				}

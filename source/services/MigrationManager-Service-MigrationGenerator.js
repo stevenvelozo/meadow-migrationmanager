@@ -153,6 +153,27 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 	}
 
 	/**
+	 * Strip the DEFAULT clause from a native SQL type string.
+	 *
+	 * MSSQL does not allow DEFAULT in ALTER COLUMN statements — defaults must
+	 * be managed as separate constraints.  This helper removes ' DEFAULT ...'
+	 * from the end of a native type so it can be used in ALTER COLUMN.
+	 *
+	 * @param {string} pNativeType - The full native type string (may contain DEFAULT)
+	 *
+	 * @return {string} The type string without the DEFAULT clause
+	 */
+	_stripDefault(pNativeType)
+	{
+		let tmpDefaultIndex = pNativeType.indexOf(' DEFAULT ');
+		if (tmpDefaultIndex > -1)
+		{
+			return pNativeType.substring(0, tmpDefaultIndex);
+		}
+		return pNativeType;
+	}
+
+	/**
 	 * Map a Meadow DataType to an MSSQL native type.
 	 *
 	 * @param {string} pDataType - The Meadow DataType
@@ -279,7 +300,9 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 			{
 				let tmpColName = this._quoteIdentifier(tmpColumnsAdded[j].Column, pDatabaseType);
 				let tmpColType = this._mapDataTypeToNative(tmpColumnsAdded[j].DataType, tmpColumnsAdded[j].Size, pDatabaseType);
-				tmpStatements.push('ALTER TABLE ' + tmpTableName + ' ADD COLUMN ' + tmpColName + ' ' + tmpColType);
+				// MSSQL uses ADD without COLUMN keyword; other engines use ADD COLUMN
+				let tmpAddKeyword = (pDatabaseType === 'MSSQL') ? 'ADD' : 'ADD COLUMN';
+				tmpStatements.push('ALTER TABLE ' + tmpTableName + ' ' + tmpAddKeyword + ' ' + tmpColName + ' ' + tmpColType);
 			}
 
 			// Columns removed
@@ -303,11 +326,12 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 			{
 				let tmpColMod = tmpColumnsModified[j];
 				let tmpColName = this._quoteIdentifier(tmpColMod.Column, pDatabaseType);
-				let tmpNewDataType = tmpColMod.Changes.DataType ? tmpColMod.Changes.DataType.To : tmpColMod.Changes.Size ? tmpColMod.Changes.DataType : undefined;
 
-				// Determine the target data type and size for the modified column
-				let tmpDataType = tmpColMod.Changes.DataType ? tmpColMod.Changes.DataType.To : null;
-				let tmpSize = tmpColMod.Changes.Size ? tmpColMod.Changes.Size.To : null;
+				// Determine the target data type and size for the modified column.
+				// If DataType changed, use the new value; otherwise fall back to the
+				// target column's DataType carried on the diff entry by SchemaDiff.
+				let tmpDataType = tmpColMod.Changes.DataType ? tmpColMod.Changes.DataType.To : (tmpColMod.DataType || null);
+				let tmpSize = tmpColMod.Changes.Size ? tmpColMod.Changes.Size.To : (tmpColMod.hasOwnProperty('Size') ? tmpColMod.Size : null);
 
 				// We need at least a DataType to generate valid ALTER syntax
 				if (tmpDataType)
@@ -323,7 +347,8 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 							tmpStatements.push('ALTER TABLE ' + tmpTableName + ' ALTER COLUMN ' + tmpColName + ' TYPE ' + tmpNativeType);
 							break;
 						case 'MSSQL':
-							tmpStatements.push('ALTER TABLE ' + tmpTableName + ' ALTER COLUMN ' + tmpColName + ' ' + tmpNativeType);
+							// MSSQL does not allow DEFAULT in ALTER COLUMN — strip it
+							tmpStatements.push('ALTER TABLE ' + tmpTableName + ' ALTER COLUMN ' + tmpColName + ' ' + this._stripDefault(tmpNativeType));
 							break;
 						case 'SQLite':
 							tmpStatements.push('-- SQLite does not support ALTER COLUMN; manual migration required for column ' + tmpColMod.Column + ' in table ' + tmpTableMod.TableName);
@@ -332,11 +357,6 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 							tmpStatements.push('ALTER TABLE ' + tmpTableName + ' MODIFY COLUMN ' + tmpColName + ' ' + tmpNativeType);
 							break;
 					}
-				}
-				else if (tmpSize)
-				{
-					// Size-only change: we cannot determine the full native type without DataType context
-					tmpStatements.push('-- Column ' + tmpColMod.Column + ' in table ' + tmpTableMod.TableName + ' has a size change but the DataType was not modified; manual review required');
 				}
 			}
 
