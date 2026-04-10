@@ -1,0 +1,7 @@
+{
+	"Name": "meadow-migrationmanager",
+	"Version": "0.0.9",
+	"Description": "Meadow Migration Manager - CLI, Web, and Console UI tool for managing database schemas and migrations",
+	"GeneratedAt": "2026-04-10T17:21:44.051Z",
+	"GitCommit": "3ce8722"
+}

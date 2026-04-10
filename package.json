@@ -26,6 +26,7 @@
 	"author": "Steven Velozo <steven@velozo.com>",
 	"license": "MIT",
 	"devDependencies": {
+		"pict-docuserve": "^0.1.5",
 		"quackage": "^1.1.0"
 	},
 	"dependencies": {
@@ -33,11 +34,11 @@
 		"blessed": "^0.1.81",
 		"codejar": "^4.3.0",
 		"fable": "^3.1.67",
+		"jsonfile": "^6.2.0",
 		"meadow-connection-mssql": "^1.0.16",
 		"meadow-connection-mysql": "^1.0.14",
 		"meadow-connection-postgresql": "^1.0.2",
 		"meadow-connection-sqlite": "^1.0.18",
-		"jsonfile": "^6.2.0",
 		"mkdirp": "^3.0.1",
 		"orator": "^6.0.4",
 		"orator-serviceserver-restify": "^2.0.10",
