@@ -1,6 +1,6 @@
 {
 	"name": "meadow-migrationmanager",
-	"version": "0.0.10",
+	"version": "0.0.11",
 	"description": "Meadow Migration Manager - CLI, Web, and Console UI tool for managing database schemas and migrations",
 	"main": "source/MeadowMigrationManager.js",
 	"bin": {
@@ -35,7 +35,7 @@
 		"codejar": "^4.3.0",
 		"fable": "^3.1.67",
 		"jsonfile": "^6.2.0",
-		"meadow-connection-mssql": "^1.0.19",
+		"meadow-connection-mssql": "^1.0.20",
 		"meadow-connection-mysql": "^1.0.14",
 		"meadow-connection-postgresql": "^1.0.2",
 		"meadow-connection-sqlite": "^1.0.18",
