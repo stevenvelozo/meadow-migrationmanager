@@ -97,7 +97,11 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 			case 'ID':
 				return 'INT UNSIGNED NOT NULL AUTO_INCREMENT';
 			case 'GUID':
-				return 'CHAR(' + (pSize || '36') + ') NOT NULL';
+				// Default GUID column width 255 — matches the CREATE TABLE
+				// default in meadow-connection-mysql. Keeping ALTER and CREATE
+				// consistent prevents introspection-then-diff cycles from
+				// re-narrowing the column on every migration pass.
+				return 'CHAR(' + (pSize || '255') + ') NOT NULL';
 			case 'ForeignKey':
 				return 'INT UNSIGNED NOT NULL DEFAULT 0';
 			case 'Numeric':
@@ -132,7 +136,9 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 			case 'ID':
 				return 'SERIAL PRIMARY KEY';
 			case 'GUID':
-				return 'CHAR(' + (pSize || '36') + ') NOT NULL';
+				// Default GUID column width 255 — matches the CREATE TABLE
+				// default in meadow-connection-postgresql.
+				return 'CHAR(' + (pSize || '255') + ') NOT NULL';
 			case 'ForeignKey':
 				return 'INTEGER NOT NULL DEFAULT 0';
 			case 'Numeric':
@@ -205,7 +211,9 @@ class MigrationManagerServiceMigrationGenerator extends libFableServiceBase
 			case 'ID':
 				return 'INT IDENTITY(1,1) NOT NULL';
 			case 'GUID':
-				return 'NCHAR(' + (pSize || '36') + ') NOT NULL';
+				// Default GUID column width 255 — matches the CREATE TABLE
+				// default in meadow-connection-mssql.
+				return 'NCHAR(' + (pSize || '255') + ') NOT NULL';
 			case 'ForeignKey':
 				return 'INT NOT NULL DEFAULT 0';
 			case 'Numeric':
